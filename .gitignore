@@ -1,0 +1,41 @@
+# Virtual environment
+.venv/
+env/
+venv/
+*.env
+
+# Data
+data/
+
+# Python bytecode files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+dist/
+*.egg-info/
+*.eggs/
+
+# Logs
+*.log
+
+# pytest
+.cache/
+
+# MyPy
+.mypy_cache/
+
+# Coverage reports
+.coverage
+*.coveragerc
+
+# Pylint
+pylint-report.txt
+pylint-output.txt
+
+# Docker
+.docker/
+docker-compose.override.yml
