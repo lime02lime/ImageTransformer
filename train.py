@@ -33,21 +33,22 @@ class Validator:
         with torch.no_grad():
             for batch_idx, batch in enumerate(tqdm(self.valid_dl)):
                 x, y = batch
-                x = x.to(self.device)   
+                x = x.to(self.device)
                 y = y.to(self.device)
 
                 scores = model(x)
                 loss = loss_fn(scores, y)
                 total_loss += loss.item()
-                correct = torch.sum(scores.argmax(dim=1) == y) 
+                correct = torch.sum(scores.argmax(dim=1) == y)
                 total_correct += correct
                 count += len(y)
 
         return total_loss / len(self.valid_dl), total_correct / count
 
+
 class Trainer:
     def __init__(
-        self, 
+        self,
         setup_config: dict,
         device: torch.device,
     ):
@@ -57,18 +58,20 @@ class Trainer:
         self.device = device
 
         # Set up datasets and dataloaders
-        self.train_ds = torchvision.datasets.MNIST(MNIST_PATH, train=True, download=True, transform=to_tensor)
-        self.val_ds = torchvision.datasets.MNIST(MNIST_PATH, train=False, download=True, transform=to_tensor)
+        self.train_ds = torchvision.datasets.MNIST(
+            MNIST_PATH, train=True, download=True, transform=to_tensor)
+        self.val_ds = torchvision.datasets.MNIST(
+            MNIST_PATH, train=False, download=True, transform=to_tensor)
 
         self.train_dl = DataLoader(
-            self.train_ds, 
+            self.train_ds,
             batch_size=self.batch_size,
             shuffle=True,
             drop_last=True,
             num_workers=NUM_WORKERS,
         )
         self.val_dl = DataLoader(
-            self.val_ds, 
+            self.val_ds,
             batch_size=self.batch_size,
             shuffle=False,
             drop_last=True,
@@ -93,13 +96,13 @@ class Trainer:
         for batch_idx, batch in enumerate(tqdm(self.train_dl)):
             # Zero your gradients for every batch!
             optimiser.zero_grad()
-    
+
             x, y = batch
             x = x.to(self.device)
             y = y.to(self.device)
 
             scores = encoder(x)
-   
+
             # Then do the loss
             loss = loss_fn(scores, y)
             loss.backward()
@@ -131,8 +134,10 @@ class Trainer:
         logger.info(f'Training config: {config}')
         log_to_wandb = config.get('log_to_wandb')
         log_locally = config.get('log_locally')
-        checkpoint_folder = config.get('checkpoint_folder', 
-                                     '/Users/kenton/projects/mlx-institute/transformer/checkpoints')
+        checkpoint_folder = config.get(
+            'checkpoint_folder',
+            '/Users/kenton/projects/mlx-institute/transformer/checkpoints',
+        )
 
         if log_to_wandb:
             run = wandb.init(
@@ -144,7 +149,8 @@ class Trainer:
         for epoch in range(epochs):
             logger.info(f'Training: Epoch {epoch + 1} of {epochs}')
             train_loss, train_accuracy = self.train_one_epoch(
-                models, loss_fn, optimiser, config.get('batches_print_frequency'),
+                models, loss_fn, optimiser, config.get(
+                    'batches_print_frequency'),
             )
             logger.info(
                 f'Validating: Epoch {epoch + 1} of {epochs}.',
@@ -163,10 +169,10 @@ class Trainer:
                     'encoder_state_dict': models['encoder'].state_dict(),
                     'optimiser_state_dict': optimiser.state_dict(),
                 }
-                
+
                 if log_locally:
                     checkpoint_path = os.path.join(
-                        checkpoint_folder, 
+                        checkpoint_folder,
                         f'{datetime.now().strftime("%Y%m%d_%H%M%S")}.pth',
                     )
                     torch.save(checkpoint, checkpoint_path)
@@ -194,7 +200,7 @@ if __name__ == '__main__':
 
     # Config parameters
     setup_config = {'batch_size': 32}
-    
+
     training_config = {
         'epochs': 5,
         'lr': 1e-3,
