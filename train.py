@@ -59,9 +59,11 @@ class Trainer:
 
         # Set up datasets and dataloaders
         self.train_ds = torchvision.datasets.MNIST(
-            MNIST_PATH, train=True, download=True, transform=to_tensor)
+            MNIST_PATH, train=True, download=True, transform=to_tensor,
+        )
         self.val_ds = torchvision.datasets.MNIST(
-            MNIST_PATH, train=False, download=True, transform=to_tensor)
+            MNIST_PATH, train=False, download=True, transform=to_tensor,
+        )
 
         self.train_dl = DataLoader(
             self.train_ds,
@@ -150,7 +152,8 @@ class Trainer:
             logger.info(f'Training: Epoch {epoch + 1} of {epochs}')
             train_loss, train_accuracy = self.train_one_epoch(
                 models, loss_fn, optimiser, config.get(
-                    'batches_print_frequency'),
+                    'batches_print_frequency',
+                ),
             )
             logger.info(
                 f'Validating: Epoch {epoch + 1} of {epochs}.',
