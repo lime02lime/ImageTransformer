@@ -1,25 +1,29 @@
+from functools import partial
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torchvision
-import torchvision.transforms as transforms
+import torchvision.transforms as T
 
 MNIST_PATH = '/Users/kenton/data/'
 
-to_tensor = transforms.ToTensor()
+to_tensor = T.ToTensor()
 
 def patchify(X: torch.Tensor, P: int) -> torch.Tensor:
     """
     Splits a single-channel image into non-overlapping P×P patches.
 
     Args:
-        X (torch.Tensor): Input image of shape (H, W)
+        X (torch.Tensor): Input image of shape (C, H, W)
         P (int): Patch side length
 
     Returns:
         torch.Tensor: Tensor of shape (N_patches, P*P)
     """
-    H, W = X.shape
+    C, H, W = X.shape
+    assert C == 1, "Input image must be single-channel"
+    X = X.squeeze()
     assert H % P == 0 and W % P == 0, "Image dimensions must be divisible by patch size"
 
     # Reshape and permute to get non-overlapping patches
@@ -27,6 +31,28 @@ def patchify(X: torch.Tensor, P: int) -> torch.Tensor:
     patches = patches.contiguous().view(-1, P*P)  # Flatten each patch
 
     return patches
+
+def make_mnist_dataset(patch = False, patch_size = None):
+
+    if patch:
+        assert patch_size is not None
+        patch_mnist = partial(patchify, P=patch_size)
+        mnist_transforms = T.Compose([
+        T.ToTensor(),
+        patch_mnist
+    ])
+    else: 
+        mnist_transforms = to_tensor
+        
+    train_ds = torchvision.datasets.MNIST(
+        MNIST_PATH, train=True, download=True, transform=mnist_transforms,
+    )
+
+    val_ds = torchvision.datasets.MNIST(
+        MNIST_PATH, train=False, download=True, transform=mnist_transforms,
+    )
+
+    return train_ds, val_ds
 
 if __name__ == '__main__':
     dataset = torchvision.datasets.MNIST(MNIST_PATH, train=True, download=True)
@@ -38,8 +64,22 @@ if __name__ == '__main__':
 
     # Patchify
     patch_size = 7
-    result = patchify(torch.tensor(X), patch_size)
+
+    patch_mnist = partial(patchify, P=patch_size)
+    mnist_transforms = T.Compose([
+    T.ToTensor(),
+    patch_mnist
+])
+    transforms = T.Compose([
+        T.ToTensor(),
+        patch_mnist
+    ])
+
+    dataset = torchvision.datasets.MNIST(MNIST_PATH, train=True, download=True, 
+                                         transform=transforms)
+    result, y = dataset[0]
     print(result.shape)
+    # print(result.shape)
     fig, axs = plt.subplots(4,4)
     axs = axs.flatten()
     for idx, ax in enumerate(axs):

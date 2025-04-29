@@ -10,9 +10,9 @@ import wandb
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from captioner.dataset import MNIST_PATH, to_tensor
-from captioner.models import CNN_Encoder
-from captioner.utils import get_device
+from captioner.dataset import make_mnist_dataset
+from captioner.models import CNN_Encoder, TransformerClassifier
+from captioner.utils import count_trainable_params, get_device
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -49,6 +49,8 @@ class Validator:
 class Trainer:
     def __init__(
         self,
+        train_ds,
+        val_ds,
         setup_config: dict,
         device: torch.device,
     ):
@@ -56,14 +58,9 @@ class Trainer:
         self.setup_config = setup_config
         self.batch_size = setup_config.get('batch_size')
         self.device = device
-
+        self.train_ds = train_ds
+        self.val_ds = val_ds
         # Set up datasets and dataloaders
-        self.train_ds = torchvision.datasets.MNIST(
-            MNIST_PATH, train=True, download=True, transform=to_tensor,
-        )
-        self.val_ds = torchvision.datasets.MNIST(
-            MNIST_PATH, train=False, download=True, transform=to_tensor,
-        )
 
         self.train_dl = DataLoader(
             self.train_ds,
@@ -201,6 +198,16 @@ if __name__ == '__main__':
     # Training configs
     # Model configs
 
+
+    model_config = {
+        'in_dim': 49,
+        'hidden_dim': 49//7,
+        'num_heads': 7,
+        'seq_len': 16,
+        'num_classes': 10,
+        'num_transformer_blocks':12
+
+    }
     # Config parameters
     setup_config = {'batch_size': 32}
 
@@ -214,9 +221,23 @@ if __name__ == '__main__':
 
     device = get_device()
 
+    # models = {
+    #     'encoder': CNN_Encoder(),
+    # }
+    # train_ds, val_ds = make_mnist_dataset(patch = False)
+
+
     models = {
-        'encoder': CNN_Encoder(),
+        'encoder': TransformerClassifier(model_config['in_dim'],
+                                        model_config['hidden_dim'],
+                                        model_config['num_heads'],
+                                        model_config['seq_len'],
+                                        model_config['num_classes'],
+                                        model_config['num_transformer_blocks']),
     }
+    train_ds, val_ds = make_mnist_dataset(patch = True, patch_size = 7)
+    num_params = count_trainable_params(models['encoder'])
+    print(f'There are {num_params} trainable parameters in the model.')
 
     optimiser = torch.optim.Adam(
         list(models['encoder'].parameters()), lr=training_config.get('lr'),
@@ -237,6 +258,8 @@ if __name__ == '__main__':
     loss_fn = torch.nn.CrossEntropyLoss()
 
     trainer = Trainer(
+        train_ds=train_ds,
+        val_ds=val_ds,
         setup_config=setup_config,
         device=device,
     )

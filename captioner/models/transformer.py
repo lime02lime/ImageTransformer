@@ -15,10 +15,6 @@ import torch
 from torch import nn
 
 
-def count_trainable_params(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-
 class AttentionBlock(nn.Module):
     # Aggregates information across the sequence independently for each feature
     def __init__(self, in_dim, hidden_dim):
@@ -80,6 +76,29 @@ class MultiHeadedAttentionBlock(nn.Module):
         head_outputs = torch.concatenate([h(X) for h in self.heads], dim=-1)
         return self.linear(head_outputs)
 
+class MultiHeadedAttentionBlockFast(nn.Module):
+    def __init__(self, in_dim: int, hidden_dim_per_head: int, num_heads: int):
+        super().__init__()
+        self.H = num_heads
+        self.hidden_dim_per_head = torch.tensor(hidden_dim_per_head, dtype=torch.int32)
+        self.Uqkv = nn.Parameter(
+            torch.empty(in_dim, 3 * num_heads * hidden_dim_per_head),
+        )
+        # Xavier/ Glorot initialisation
+        nn.init.xavier_uniform_(self.Uqkv)
+        self.linear = nn.Linear(
+            num_heads * hidden_dim_per_head, in_dim, bias=False,
+        )
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, X):
+        # Shapes are B x N x D_h*num_heads
+        q,k,v = (X @ self.Uqkv).chunk(3, dim=-1)
+        # Shape is B x N x N
+        A = self.softmax(torch.bmm(q, k.transpose(1, 2)) / torch.sqrt(self.hidden_dim_per_head ))
+        # Shape is B x N x D_h*num_heads
+        head_outputs = A @ v
+        return self.linear(head_outputs)
 
 class MLP(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim):
@@ -99,7 +118,7 @@ class TransformerBlock(torch.nn.Module):
     def __init__(self, in_dim: int, hidden_dim: int, num_heads: int):
         super().__init__()
         self.ln_1 = nn.LayerNorm(in_dim)
-        self.msa = MultiHeadedAttentionBlock(in_dim, hidden_dim, num_heads)
+        self.msa = MultiHeadedAttentionBlockFast(in_dim, hidden_dim, num_heads)
         self.ln_2 = nn.LayerNorm(in_dim)
         self.mlp = MLP(in_dim, in_dim, in_dim)
 
@@ -112,19 +131,12 @@ class TransformerBlock(torch.nn.Module):
 
 
 class TransformerEncoder(torch.nn.Module):
-    def __init__(self, in_dim: int, hidden_dim: int, num_heads: int, seq_len: int):
+    def __init__(self, hidden_dim: int, num_heads: int, num_transformer_blocks: int):
         super().__init__()
-        self.linear_proj = nn.Linear(in_dim, hidden_dim)
-        self.block_1 = TransformerBlock(hidden_dim, hidden_dim, num_heads)
-        self.block_2 = TransformerBlock(hidden_dim, hidden_dim, num_heads)
-        self.block_3 = TransformerBlock(hidden_dim, hidden_dim, num_heads)
-
-        # Fixed learnable position embeddings shape (1, N, hidden_dim)
-        self.positional_embeddings = nn.Parameter(
-            torch.empty(1, seq_len, hidden_dim),
-        )
-        # Xavier/ Glorot initialisation
-        nn.init.xavier_uniform_(self.positional_embeddings)
+        blocks = []
+        for i in range(num_transformer_blocks):
+            blocks.append(TransformerBlock(hidden_dim, hidden_dim, num_heads))
+        self.blocks = nn.Sequential(*blocks)
         self.ln = nn.LayerNorm(hidden_dim)
 
     def forward(self, X: torch.Tensor):
@@ -142,20 +154,24 @@ class TransformerEncoder(torch.nn.Module):
         Returns:
             Y (torch.Tensor): shape B x D_hidden
         """
-        # Linear project and add position encoding (patch encoding)
-        X = self.linear_proj(X) + self.positional_embeddings
-        X = self.block_1(X)
-        X = self.block_2(X)
-        X = self.block_3(X)
+        X = self.blocks(X)
         # Choose first token, Eq. (4) in ViT paper
         y = self.ln(X[:, 0, :])
         return y
 
 
 class TransformerClassifier(torch.nn.Module):
-    def __init__(self, in_dim: int, hidden_dim: int, num_heads: int, seq_len: int, num_classes):
+    def __init__(self, in_dim: int, hidden_dim: int, num_heads: int, seq_len: int, num_classes, num_transformer_blocks: int):
         super().__init__()
-        self.enc = TransformerEncoder(in_dim, hidden_dim, num_heads, seq_len)
+        self.linear_proj = nn.Linear(in_dim, hidden_dim)
+        # Fixed learnable position embeddings shape (1, N, hidden_dim)
+        self.positional_embeddings = nn.Parameter(
+            torch.empty(1, seq_len, hidden_dim),
+        )
+        # Xavier/ Glorot initialisation
+        nn.init.xavier_uniform_(self.positional_embeddings)
+
+        self.enc = TransformerEncoder(hidden_dim, num_heads, num_transformer_blocks)
         self.classification_head = nn.Linear(hidden_dim, num_classes)
 
     def forward(self, X):
@@ -174,11 +190,12 @@ class TransformerClassifier(torch.nn.Module):
         Returns:
             Y (torch.Tensor): shape B x num_classes
         """
+        # Linear project and add position encoding (patch encoding)
+        X = self.linear_proj(X) + self.positional_embeddings
         X = self.enc.forward(X)
         y = self.classification_head(X)
         return y
-
-
+    
 if __name__ == '__main__':
     # To keep compute and number of parameters constant when changing the
     # number of heads k, the hidden Dh (Eq. 5) is typically set to D/k
@@ -212,6 +229,10 @@ if __name__ == '__main__':
     )
     assert transformer_classifier(x).shape == (batch_size, num_classes)
 
-    print("Trainable parameters:", 
-          count_trainable_params(transformer_classifier))
+    multi_attention_block_fast = MultiHeadedAttentionBlockFast(
+        in_dim, hidden_dim, num_heads,
+    )
+    print(multi_attention_block_fast(x).shape)
+    # print("Trainable parameters:", 
+    #       count_trainable_params(transformer_classifier))
 

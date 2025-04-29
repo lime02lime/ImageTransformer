@@ -1,3 +1,3 @@
-__all__ = ['get_device']
+__all__ = ['get_device', 'count_trainable_params']
 
-from .utils import get_device
+from .utils import count_trainable_params, get_device
