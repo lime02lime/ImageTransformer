@@ -16,7 +16,7 @@ class GridMNISTDataset(Dataset):
         self.max_digits = max_digits
 
     def __len__(self):
-        return len(self.mnist) // (self.max_digits // 2)
+        return len(self.mnist) // (self.max_digits // 4)
 
     def __getitem__(self, idx):
         canvas = torch.zeros(1, self.canvas_size, self.canvas_size)

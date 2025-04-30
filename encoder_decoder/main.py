@@ -237,14 +237,14 @@ def main():
     
     # config for training
     config = {
-        'learning_rate': 1e-4,
+        'learning_rate': 1e-3,
         'min_lr': 5e-7,
         'weight_decay': 0.01,
         'epochs': 25,
         'batch_size': 512,
-        'num_heads': 12,
-        'emb_dim': 768,
-        'ff_hidden_dim': 512,
+        'num_heads': 8,
+        'emb_dim': 2048,
+        'ff_hidden_dim': 256,
         'num_encoder_layers': 6,
         'num_decoder_layers': 6,
         'patch_dim': 196, 
