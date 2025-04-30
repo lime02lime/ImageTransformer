@@ -198,14 +198,13 @@ if __name__ == '__main__':
     # Training configs
     # Model configs
 
-
     model_config = {
         'in_dim': 49,
         'hidden_dim': 49//7,
         'num_heads': 7,
         'seq_len': 16,
         'num_classes': 10,
-        'num_transformer_blocks':12
+        'num_transformer_blocks': 12,
 
     }
     # Config parameters
@@ -226,16 +225,17 @@ if __name__ == '__main__':
     # }
     # train_ds, val_ds = make_mnist_dataset(patch = False)
 
-
     models = {
-        'encoder': TransformerClassifier(model_config['in_dim'],
-                                        model_config['hidden_dim'],
-                                        model_config['num_heads'],
-                                        model_config['seq_len'],
-                                        model_config['num_classes'],
-                                        model_config['num_transformer_blocks']),
+        'encoder': TransformerClassifier(
+            model_config['in_dim'],
+            model_config['hidden_dim'],
+            model_config['num_heads'],
+            model_config['seq_len'],
+            model_config['num_classes'],
+            model_config['num_transformer_blocks'],
+        ),
     }
-    train_ds, val_ds = make_mnist_dataset(patch = True, patch_size = 7)
+    train_ds, val_ds = make_mnist_dataset(patch=True, patch_size=7)
     num_params = count_trainable_params(models['encoder'])
     print(f'There are {num_params} trainable parameters in the model.')
 
