@@ -4,8 +4,10 @@ env/
 venv/
 *.env
 
-# Data
+# Data / models
 data/
+*.pt
+*.pth
 
 # WANDB
 wandb/
