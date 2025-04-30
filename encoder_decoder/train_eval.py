@@ -124,7 +124,7 @@ def train_model(model, train_loader, val_loader, config):
     
     # Training loop
     best_val_loss = float('inf')
-    for epoch in range(config['epochs']):
+    for epoch in range(1, config['epochs']+1):
         # Train
         train_loss = train_epoch(model, train_loader, optimizer, criterion, device, epoch)
         
@@ -170,8 +170,8 @@ import matplotlib.pyplot as plt
 
 def show_test_examples(model, test_loader, config, device, num_examples=5):
     model.eval()
-    start_token = 10  # Your START token index
-    stop_token = 10   # Your STOP token index (if using same as start, else adjust)
+    start_token = 10  # START token index
+    stop_token = 11   # STOP token index
     with torch.no_grad():
         shown = 0
         for patches, labels in test_loader:
@@ -188,7 +188,7 @@ def show_test_examples(model, test_loader, config, device, num_examples=5):
                 # Plot the image
                 # Reconstruct the image from patches for visualization
                 img = patch_to_image(patch.cpu().squeeze(0), config)
-                plt.figure(figsize=(3,3))
+                plt.figure(figsize=(4,4))
                 plt.imshow(img, cmap='gray')
                 plt.axis('off')
                 plt.title(f"GT: {label.tolist()}\nPred: {generated}")
@@ -215,8 +215,11 @@ def patch_to_image(patches, config):
 
 def main():
 
+    train_path = 'encoder_decoder/train_file.pt'
+    test_path = 'encoder_decoder/test_file.pt'
+
     # Check if data files exist, otherwise create them
-    if not (os.path.exists('encoder_decoder/train_file.pt') and os.path.exists('encoder_decoder/test_file.pt')):
+    if not (os.path.exists(train_path) and os.path.exists(test_path)):
         print("Data files not found. Creating datasets...")
         try:
             create_and_save_datasets()
@@ -231,23 +234,23 @@ def main():
         'learning_rate': 1e-4,
         'min_lr': 5e-7,
         'weight_decay': 0.01,
-        'epochs': 30,
+        'epochs': 2,
         'batch_size': 64,
         'num_heads': 8,
         'emb_dim': 256,
         'ff_hidden_dim': 512,
         'num_encoder_layers': 6,
         'num_decoder_layers': 6,
-        'patch_dim': 196,  # Changed from 784 to match your actual patch dimension
+        'patch_dim': 196, 
         'num_classes': 13,  # 10 digits + start/stop tokens
-        'max_seq_length': 12,  # Changed to match your actual sequence length
-        'num_patches': 64   # Changed to match your actual number of patches
+        'max_seq_length': 12,
+        'num_patches': 64   
     }
 
     # Load data
     try:
-        train_loader = load_dataset_and_loader('train_file.pt', batch_size=config['batch_size'])
-        test_loader = load_dataset_and_loader('test_file.pt', batch_size=config['batch_size'])
+        train_loader = load_dataset_and_loader(train_path, batch_size=config['batch_size'])
+        test_loader = load_dataset_and_loader(test_path, batch_size=config['batch_size'])
     except Exception as e:
         print(f"Error loading datasets: {e}")
         exit(1)
@@ -261,9 +264,9 @@ def main():
         ff_hidden_dim=config['ff_hidden_dim'],# 512
         num_encoder_layers=config['num_encoder_layers'],
         num_decoder_layers=config['num_decoder_layers'],
-        num_classes=config['num_classes'],    # 12
+        num_classes=config['num_classes'],    # 13
         num_patches=config['num_patches'],    # 64 (matches your input)
-        max_seq_length=config['max_seq_length'] # 11 (matches your label sequence length)
+        max_seq_length=config['max_seq_length'] # 12 (matches label sequence length)
     )
     
     # Your training loop
@@ -272,9 +275,9 @@ def main():
     # Show some test examples
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    checkpoint = torch.load('best_model.pth')
+    checkpoint = torch.load('encoder_decoder/best_model.pth')
     model.load_state_dict(checkpoint['model_state_dict'])
-    show_test_examples(model, test_loader, config, device, num_examples=10)
+    show_test_examples(model, test_loader, config, device, num_examples=5)
 
 
 if __name__ == "__main__":
