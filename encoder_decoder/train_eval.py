@@ -4,8 +4,9 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 from torch.nn import functional as F
-from encoder_decoder.model import CustomTransformerEncoderDecoder
-from encoder_decoder.data_prep import load_dataset_and_loader
+from model import CustomTransformerEncoderDecoder
+from data_prep import load_dataset_and_loader, create_and_save_datasets
+import os
 
 
 def train_epoch(model, train_loader, optimizer, criterion, device, epoch):
@@ -167,16 +168,24 @@ def train_model(model, train_loader, val_loader, config):
 
 
 def main():
-    # Load data
-    train_loader = load_dataset_and_loader('train_file.pt', batch_size=config['batch_size'])
-    test_loader = load_dataset_and_loader('test_file.pt', batch_size=config['batch_size'])
+
+    # Check if data files exist, otherwise create them
+    if not (os.path.exists('encoder_decoder/train_file.pt') and os.path.exists('encoder_decoder/test_file.pt')):
+        print("Data files not found. Creating datasets...")
+        try:
+            create_and_save_datasets()
+        except Exception as e:
+            print(f"Error creating datasets: {e}")
+            exit(1)
+    else:
+        print("Data files found. Skipping dataset creation.")
     
     # config for training
     config = {
         'learning_rate': 1e-4,
-        'min_lr': 1e-6,
+        'min_lr': 5e-7,
         'weight_decay': 0.01,
-        'epochs': 50,
+        'epochs': 30,
         'batch_size': 64,
         'num_heads': 8,
         'emb_dim': 256,
@@ -188,6 +197,16 @@ def main():
         'max_seq_length': 11,  # Changed to match your actual sequence length
         'num_patches': 64   # Changed to match your actual number of patches
     }
+
+    # Load data
+    try:
+        train_loader = load_dataset_and_loader('train_file.pt', batch_size=config['batch_size'])
+        test_loader = load_dataset_and_loader('test_file.pt', batch_size=config['batch_size'])
+    except Exception as e:
+        print(f"Error loading datasets: {e}")
+        exit(1)
+
+    print("Data loaded successfully. Initiating and training model...")
 
     model = CustomTransformerEncoderDecoder(
         patch_dim=config['patch_dim'],        # 196
@@ -204,7 +223,6 @@ def main():
     # Your training loop
     train_model(model, train_loader, test_loader, config)
 
-    
 
 
 if __name__ == "__main__":

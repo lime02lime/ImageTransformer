@@ -143,6 +143,19 @@ def load_dataset_and_loader(load_path, batch_size=64):
     return dataloader
 
 
+def create_and_save_datasets(grid_size=4, cell_size=28, max_digits=10):
+    # Define the size of the grid (e.g. 4x4) and size of each MNIST cell (28x28)
+    grid_size = 4
+    cell_size = 28
+    transform = transforms.ToTensor()
+    mnist_train = datasets.MNIST(root="./data", train=True, download=True, transform=transform)
+    mnist_test = datasets.MNIST(root="./data", train=False, download=True, transform=transform)
+    composed_train = GridMNISTDataset(mnist_train, grid_size=grid_size, cell_size=cell_size, max_digits=10)
+    composed_test = GridMNISTDataset(mnist_test, grid_size=grid_size, cell_size=cell_size, max_digits=10)
+    save_dataset(composed_train, "encoder_decoder/train_file.pt")
+    save_dataset(composed_test, "encoder_decoder/test_file.pt")
+
+
 
 def main():
     # Define the size of the grid (e.g. 4x4) and size of each MNIST cell (28x28)
