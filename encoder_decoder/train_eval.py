@@ -85,7 +85,7 @@ def evaluate(model, val_loader, criterion, device):
     
     return avg_loss, accuracy
 
-def train_model(model, train_loader, val_loader, config):
+def train_model(model, train_loader, val_loader, config, save_path='best_model.pth'):
     """
     Main training function with wandb integration
     
@@ -153,7 +153,7 @@ def train_model(model, train_loader, val_loader, config):
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'val_loss': val_loss,
-            }, 'best_model.pth')
+            }, save_path)
 
             best_val_loss = val_loss
             artifact = wandb.Artifact('best-model', type='model')
@@ -270,7 +270,8 @@ def main():
     )
     
     # Your training loop
-    train_model(model, train_loader, test_loader, config)
+    model_save_path = 'encoder_decoder/best_model.pth'
+    train_model(model, train_loader, test_loader, config, save_path=model_save_path)
 
     # Show some test examples
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
