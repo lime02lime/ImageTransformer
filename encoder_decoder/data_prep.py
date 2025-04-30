@@ -26,7 +26,7 @@ class GridMNISTDataset(Dataset):
         selected_positions = positions[:num_digits]
         selected_positions.sort()
 
-        labels = []
+        labels = [10]
         sub_images = []
 
         for pos in selected_positions:
@@ -41,7 +41,7 @@ class GridMNISTDataset(Dataset):
             labels.append(label)
             sub_images.append(digit_img)
 
-        labels.append(10)  # STOP token
+        labels.append(11)  # STOP token
         return canvas, torch.tensor(labels), sub_images
 
 
@@ -62,7 +62,7 @@ def collate_fn(batch):
     labels = [item[1] for item in batch]
     patch_list = [create_image_patches(image) for image in images]
     patches = torch.tensor(np.array(patch_list), dtype=torch.float32)
-    labels = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=11)  # PAD = 11
+    labels = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=12)  # PAD = 12
     return patches, labels
 
 
@@ -101,7 +101,7 @@ def save_dataset(dataset, save_path, chunk_size=1000):
     sample_canvas, sample_labels, _ = dataset[0]
     all_canvases = torch.empty(total_size, *sample_canvas.shape)
     max_label_len = max(len(dataset[i][1]) for i in range(min(100, total_size)))  # Sample first 100 for max length
-    all_labels = torch.full((total_size, max_label_len), 11)  # Initialize with PAD token
+    all_labels = torch.full((total_size, max_label_len), 12)  # Initialize with PAD token
     
     # Save in chunks to manage memory
     for i in range(0, total_size, chunk_size):

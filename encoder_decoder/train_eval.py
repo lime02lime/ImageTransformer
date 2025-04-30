@@ -110,7 +110,7 @@ def train_model(model, train_loader, val_loader, config):
     # Setup training
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
-    criterion = nn.CrossEntropyLoss(ignore_index=11)
+    criterion = nn.CrossEntropyLoss(ignore_index=12)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=config['learning_rate'],
@@ -166,6 +166,52 @@ def train_model(model, train_loader, val_loader, config):
 
 
 
+import matplotlib.pyplot as plt
+
+def show_test_examples(model, test_loader, config, device, num_examples=5):
+    model.eval()
+    start_token = 10  # Your START token index
+    stop_token = 10   # Your STOP token index (if using same as start, else adjust)
+    with torch.no_grad():
+        shown = 0
+        for patches, labels in test_loader:
+            patches = patches.to(device)
+            labels = labels.to(device)
+            for i in range(patches.size(0)):
+                patch = patches[i].unsqueeze(0)  # (1, num_patches, patch_dim)
+                label = labels[i]
+                # Generate output
+                generated = model.generate(
+                    patch, start_token=start_token, stop_token=stop_token,
+                    device=device, max_len=config['max_seq_length']
+                )
+                # Plot the image
+                # Reconstruct the image from patches for visualization
+                img = patch_to_image(patch.cpu().squeeze(0), config)
+                plt.figure(figsize=(3,3))
+                plt.imshow(img, cmap='gray')
+                plt.axis('off')
+                plt.title(f"GT: {label.tolist()}\nPred: {generated}")
+                plt.show()
+                shown += 1
+                if shown >= num_examples:
+                    return
+
+def patch_to_image(patches, config):
+    # Reconstructs the image from patches for visualization
+    patch_size = int(config['patch_dim'] ** 0.5)
+    grid_size = int(config['num_patches'] ** 0.5)
+    img = torch.zeros(grid_size * patch_size, grid_size * patch_size)
+    idx = 0
+    for i in range(grid_size):
+        for j in range(grid_size):
+            patch = patches[idx].reshape(patch_size, patch_size)
+            img[i*patch_size:(i+1)*patch_size, j*patch_size:(j+1)*patch_size] = patch
+            idx += 1
+    return img
+
+
+
 
 def main():
 
@@ -193,8 +239,8 @@ def main():
         'num_encoder_layers': 6,
         'num_decoder_layers': 6,
         'patch_dim': 196,  # Changed from 784 to match your actual patch dimension
-        'num_classes': 12,  # 10 digits + start/stop tokens
-        'max_seq_length': 11,  # Changed to match your actual sequence length
+        'num_classes': 13,  # 10 digits + start/stop tokens
+        'max_seq_length': 12,  # Changed to match your actual sequence length
         'num_patches': 64   # Changed to match your actual number of patches
     }
 
@@ -223,6 +269,12 @@ def main():
     # Your training loop
     train_model(model, train_loader, test_loader, config)
 
+    # Show some test examples
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    checkpoint = torch.load('best_model.pth')
+    model.load_state_dict(checkpoint['model_state_dict'])
+    show_test_examples(model, test_loader, config, device, num_examples=10)
 
 
 if __name__ == "__main__":
