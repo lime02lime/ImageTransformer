@@ -1,0 +1,20 @@
+program: encoder_decoder/main_sweep.py
+method: random  # Can also use grid or bayesian
+metric:
+  name: val_loss
+  goal: minimize
+parameters:
+  learning_rate:
+    values: [1e-4, 1e-5, 1e-6]
+  batch_size:
+    values: [128, 256, 512]
+  emb_dim:
+    values: [256, 512, 768]
+  num_heads:
+    values: [6, 8, 12]
+  ff_hidden_dim:
+    values: [256, 512, 1024]
+  num_encoder_layers:
+    values: [4, 6, 8]
+  num_decoder_layers:
+    values: [4, 6, 8]

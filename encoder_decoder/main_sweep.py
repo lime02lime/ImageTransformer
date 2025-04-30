@@ -85,7 +85,7 @@ def evaluate(model, val_loader, criterion, device):
     
     return avg_loss, accuracy
 
-def train_model(model, train_loader, val_loader, config, save_path='best_model.pth'):
+def train_model(model, train_loader, val_loader, config, save_path=None):
     """
     Main training function with wandb integration
     
@@ -96,17 +96,6 @@ def train_model(model, train_loader, val_loader, config, save_path='best_model.p
         config: Dictionary containing training configuration
     """
 
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    run_name = f"run-{timestamp}"
-
-    # Initialize wandb
-    wandb.init(
-        entity="emilengdahl",
-        project="ImageTransformer",
-        config=config,
-        name=run_name, reinit=True, id=None
-    )
-    
     # Setup training
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
@@ -145,7 +134,7 @@ def train_model(model, train_loader, val_loader, config, save_path='best_model.p
         })
         
         # Save best model
-        if val_loss < best_val_loss:
+        if save_path and (val_loss < best_val_loss):
 
             # Save model checkpoint to file
             torch.save({
@@ -219,7 +208,8 @@ def patch_to_image(patches, config):
 
 def main():
 
-    train_or_eval = input("Train or eval? (train/eval): ").strip().lower()
+    #train_or_eval = input("Train or eval? (train/eval): ").strip().lower()
+    train_or_eval = 'train'  # Set to 'train' for sweep training
 
     train_path = 'encoder_decoder/train_file.pt'
     test_path = 'encoder_decoder/test_file.pt'
@@ -235,8 +225,7 @@ def main():
     else:
         print("Data files found. Skipping dataset creation.")
     
-    # config for training
-    config = {
+    fixed_params = {
         'learning_rate': 1e-4,
         'min_lr': 5e-7,
         'weight_decay': 0.01,
@@ -253,10 +242,27 @@ def main():
         'num_patches': 64   
     }
 
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    run_name = f"sweep-{timestamp}"
+
+    # Initialize wandb
+    wandb.init(
+        entity="emilengdahl",
+        project="ImageTransformer",
+        #config=config,
+        name=run_name,
+        reinit=True
+    )
+    config = wandb.config
+
+    full_config = fixed_params.copy()
+    full_config.update(dict(wandb.config))
+
+
     # Load data
     try:
-        train_loader = load_dataset_and_loader(train_path, batch_size=config['batch_size'])
-        test_loader = load_dataset_and_loader(test_path, batch_size=config['batch_size'])
+        train_loader = load_dataset_and_loader(train_path, batch_size=full_config['batch_size'])
+        test_loader = load_dataset_and_loader(test_path, batch_size=full_config['batch_size'])
     except Exception as e:
         print(f"Error loading datasets: {e}")
         exit(1)
@@ -264,15 +270,15 @@ def main():
     print("Data loaded successfully. Initiating model...")
 
     model = CustomTransformerEncoderDecoder(
-        patch_dim=config['patch_dim'],        # 196
-        emb_dim=config['emb_dim'],           # 256
-        num_heads=config['num_heads'],        # 8
-        ff_hidden_dim=config['ff_hidden_dim'],# 512
-        num_encoder_layers=config['num_encoder_layers'],
-        num_decoder_layers=config['num_decoder_layers'],
-        num_classes=config['num_classes'],    # 13
-        num_patches=config['num_patches'],    # 64 (matches your input)
-        max_seq_length=config['max_seq_length'] # 12 (matches label sequence length)
+        patch_dim=full_config['patch_dim'],        # 196
+        emb_dim=full_config['emb_dim'],           # 256
+        num_heads=full_config['num_heads'],        # 8
+        ff_hidden_dim=full_config['ff_hidden_dim'],# 512
+        num_encoder_layers=full_config['num_encoder_layers'],
+        num_decoder_layers=full_config['num_decoder_layers'],
+        num_classes=full_config['num_classes'],    # 13
+        num_patches=full_config['num_patches'],    # 64 (matches your input)
+        max_seq_length=full_config['max_seq_length'] # 12 (matches label sequence length)
     )
     
     # Your training loop
@@ -281,7 +287,7 @@ def main():
     if train_or_eval == 'train':
         # Train the model
         print("Training the model...")
-        train_model(model, train_loader, test_loader, config, save_path=model_save_path)
+        train_model(model, train_loader, test_loader, full_config) # save_path=model_save_path ADD THIS IN TO SAVE THE MODEL
         print("Training completed. Model saved.")
     elif train_or_eval == 'eval':
         # Check if the model file exists
@@ -291,6 +297,7 @@ def main():
         else:
             print(f"Model file {model_save_path} found. Proceeding with evaluation.")
 
+    """
     # Show some test examples
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -300,6 +307,7 @@ def main():
     # in this case we save these example outputs as images, so this works both locally and through remote
     print("Evaluating and saving test examples...")
     show_test_examples(model, test_loader, config, device, num_examples=5)
+    """
 
 
 if __name__ == "__main__":
