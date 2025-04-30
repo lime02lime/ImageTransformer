@@ -23,7 +23,7 @@ Loss function: Cross entropy loss
 | Transformer 3 layers, 1 head        | 5092                 | 70                       | 92.0                               |
 | Transformer 3 layers, 1 head (fast) | 5092                 | 30                       |                                    |
 | Transformer, 12 layers, 1 head      | 18700                | 100                      | 91.4                               |
-| Transformer, 12 layers, 3 heads     | 18700                | 100                      | 91.4                               |
+| Transformer, 12 layers, 3 heads     |                      |                          |                                    |
 
 The transformer has been implemented with learnable positional encodings.
 
@@ -44,5 +44,10 @@ A nice baseline would be CNN-based character detector and then the MNIST classif
             - Implements
         -
     Implements Pre normalisation
+
+Learnings
+
+- Names are hard
+- Start from the specific, then generalise
 
 ## References

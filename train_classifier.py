@@ -26,7 +26,7 @@ class Validator:
         self.valid_dl = validation_dataloader
         self.device = device
 
-    def validate(self, model: torch.nn.Module, loss_fn: torch.nn.Module):
+    def validate(self, model: torch.nn.Module, loss_fn: torch.nn.Module, score_fn):
         total_correct = 0
         count = 0
         total_loss = 0.
@@ -220,22 +220,22 @@ if __name__ == '__main__':
 
     device = get_device()
 
-    # models = {
-    #     'encoder': CNN_Encoder(),
-    # }
-    # train_ds, val_ds = make_mnist_dataset(patch = False)
-
     models = {
-        'encoder': TransformerClassifier(
-            model_config['in_dim'],
-            model_config['hidden_dim'],
-            model_config['num_heads'],
-            model_config['seq_len'],
-            model_config['num_classes'],
-            model_config['num_transformer_blocks'],
-        ),
+        'encoder': CNN_Encoder(),
     }
-    train_ds, val_ds = make_mnist_dataset(patch=True, patch_size=7)
+    train_ds, val_ds = make_mnist_dataset(patch=False)
+
+    # models = {
+    #     'encoder': TransformerClassifier(
+    #         model_config['in_dim'],
+    #         model_config['hidden_dim'],
+    #         model_config['num_heads'],
+    #         model_config['seq_len'],
+    #         model_config['num_classes'],
+    #         model_config['num_transformer_blocks'],
+    #     ),
+    # }
+    # train_ds, val_ds = make_mnist_dataset(patch=True, patch_size=7)
     num_params = count_trainable_params(models['encoder'])
     print(f'There are {num_params} trainable parameters in the model.')
 
