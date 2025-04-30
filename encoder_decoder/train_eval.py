@@ -192,9 +192,12 @@ def show_test_examples(model, test_loader, config, device, num_examples=5):
                 plt.imshow(img, cmap='gray')
                 plt.axis('off')
                 plt.title(f"GT: {label.tolist()}\nPred: {generated}")
-                plt.show()
+                
+                plt.savefig(f"example_{shown}.png")  # save instead of show
+                #plt.show()
                 shown += 1
                 if shown >= num_examples:
+                    print(f"{num_examples} examples generated and saved.")
                     return
 
 def patch_to_image(patches, config):
@@ -215,6 +218,8 @@ def patch_to_image(patches, config):
 
 def main():
 
+    train_or_eval = input("Train or eval? (train/eval): ").strip().lower()
+
     train_path = 'encoder_decoder/train_file.pt'
     test_path = 'encoder_decoder/test_file.pt'
 
@@ -234,8 +239,8 @@ def main():
         'learning_rate': 1e-4,
         'min_lr': 5e-7,
         'weight_decay': 0.01,
-        'epochs': 2,
-        'batch_size': 64,
+        'epochs': 30,
+        'batch_size': 256,
         'num_heads': 8,
         'emb_dim': 256,
         'ff_hidden_dim': 512,
@@ -255,7 +260,7 @@ def main():
         print(f"Error loading datasets: {e}")
         exit(1)
 
-    print("Data loaded successfully. Initiating and training model...")
+    print("Data loaded successfully. Initiating model...")
 
     model = CustomTransformerEncoderDecoder(
         patch_dim=config['patch_dim'],        # 196
@@ -270,14 +275,29 @@ def main():
     )
     
     # Your training loop
-    model_save_path = 'encoder_decoder/best_model.pth'
-    train_model(model, train_loader, test_loader, config, save_path=model_save_path)
+    model_save_path = 'best_model.pth'
+    
+    if train_or_eval == 'train':
+        # Train the model
+        print("Training the model...")
+        train_model(model, train_loader, test_loader, config, save_path=model_save_path)
+        print("Training completed. Model saved.")
+    elif train_or_eval == 'eval':
+        # Check if the model file exists
+        if not os.path.exists(model_save_path):
+            print(f"Model file {model_save_path} not found. Please train the model first.")
+            exit(1)
+        else:
+            print(f"Model file {model_save_path} found. Proceeding with evaluation.")
 
     # Show some test examples
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    checkpoint = torch.load('encoder_decoder/best_model.pth')
+    checkpoint = torch.load(model_save_path)
+    model.to(device)
     model.load_state_dict(checkpoint['model_state_dict'])
+    # in this case we save these example outputs as images, so this works both locally and through remote
+    print("Evaluating and saving test examples...")
     show_test_examples(model, test_loader, config, device, num_examples=5)
 
 
