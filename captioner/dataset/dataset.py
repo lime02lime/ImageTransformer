@@ -7,24 +7,11 @@ import torchvision
 import torchvision.transforms as T
 from torchvision.utils import make_grid
 
+from captioner.utils.visualise import visualise_patched_input
+
 MNIST_PATH = '/Users/kenton/data/'
 
 to_tensor = T.ToTensor()
-
-
-def label_tensor_to_string(labels: torch.Tensor) -> str:
-    labels = labels.tolist()
-    str_list = []
-    for label in labels:
-        if label == 12:
-            str_list.append('<start>')
-        elif label == 13:
-            str_list.append('<end>')
-        elif label == 11:
-            pass
-        else:
-            str_list.append(str(label))
-    return ','.join(str_list)
 
 
 def patchify(X: torch.Tensor, P: int) -> torch.Tensor:
@@ -41,13 +28,16 @@ def patchify(X: torch.Tensor, P: int) -> torch.Tensor:
     C, H, W = X.shape
     assert C == 1, 'Input image must be single-channel'
     X = X.squeeze()
-    assert H % P == 0 and W % P == 0, 'Image dimensions must be divisible by patch size'
+    assert H % P == 0 and W % P == 0, 'Image dimensions must be divisible by '
+    'patch size'
 
     # Reshape and permute to get non-overlapping patches
     patches = X.unfold(0, P, P).unfold(1, P, P)  # shape: (H/P, W/P, P, P)
     patches = patches.contiguous().view(-1, P*P)  # Flatten each patch
 
     return patches
+
+# MNIST Classification --------------------------------------------------------
 
 
 def make_mnist_dataset(patch=False, patch_size=None):
@@ -72,19 +62,25 @@ def make_mnist_dataset(patch=False, patch_size=None):
 
     return train_ds, val_ds
 
+# MNIST Grid Captioning -------------------------------------------------------
+
 
 class MNISTCaptioningDataset:
     def __init__(self, mnist_path, train: bool = True, transform=None):
         self.base_dataset = torchvision.datasets.MNIST(
             mnist_path, train=train, download=True,
         )
-        # 11 is the label for the zero image
-        # 12 is the label for the start token
-        # 13 is the label for the end token
+        # 10 is the label for the zero image
+        # 11 is the label for the start token
+        # 12 is the label for the end token
         self.im_size = 224
         self.prob_number = 0.4
         self.transform = transform
         self.zero_image = torch.zeros((1, 28, 28))
+
+        self.zero_token = 10
+        self.start_token = 11
+        self.end_token = 12
 
     def __len__(self):
         return len(self.base_dataset)
@@ -94,10 +90,10 @@ class MNISTCaptioningDataset:
 
         num_bool = torch.rand(8 * 8) > (1 - self.prob_number)
         numbers = []
-        labels = [12]
+        labels = [self.start_token]
 
         for i in num_bool:
-            if i == True:
+            if i:
                 X, y = self.base_dataset[
                     torch.randint(
                         0, len(self.base_dataset), (1,),
@@ -106,11 +102,10 @@ class MNISTCaptioningDataset:
                 numbers.append(to_tensor(X))
                 labels.append(y)
             else:
-                y = 11
                 numbers.append(self.zero_image)
-                labels.append(y)
+                labels.append(self.zero_token)
         # End sequence token
-        labels.append(13)
+        labels.append(self.end_token)
         numbers = torch.stack(numbers)
 
         # Somehow becomes 3 channeled, set to single channeled
@@ -120,6 +115,44 @@ class MNISTCaptioningDataset:
         if self.transform is not None:
             numbers = self.transform(numbers)
         return numbers, y
+
+
+def make_mnist_captioning_dataset(patch=False, patch_size=None):
+
+    if patch:
+        assert patch_size is not None
+        patch_mnist = partial(patchify, P=patch_size)
+        mnist_transforms = T.Compose([
+            T.ToTensor(),
+            patch_mnist,
+        ])
+    else:
+        mnist_transforms = to_tensor
+
+    train_ds = MNISTCaptioningDataset(
+        MNIST_PATH, train=True,  transform=mnist_transforms,
+    )
+
+    val_ds = torchvision.datasets.MNIST(
+        MNIST_PATH, train=False,  transform=mnist_transforms,
+    )
+
+    return train_ds, val_ds
+
+
+def label_tensor_to_string(labels: torch.Tensor) -> str:
+    labels = labels.tolist()
+    str_list = []
+    for label in labels:
+        if label == 11:
+            str_list.append('<start>')
+        elif label == 12:
+            str_list.append('<end>')
+        elif label == 10:
+            pass
+        else:
+            str_list.append(str(label))
+    return ','.join(str_list)
 
 
 if __name__ == '__main__':
@@ -139,10 +172,6 @@ if __name__ == '__main__':
         patch_size = 7
 
         patch_mnist = partial(patchify, P=patch_size)
-        mnist_transforms = T.Compose([
-            T.ToTensor(),
-            patch_mnist,
-        ])
         transforms = T.Compose([
             T.ToTensor(),
             patch_mnist,
@@ -178,12 +207,6 @@ if __name__ == '__main__':
         )
         result, y = dataset[0]
         print(result.shape)
-        fig, axs = plt.subplots(14, 14)
-        axs = axs.flatten()
-        for idx, ax in enumerate(axs):
-            ax.imshow(result[idx].reshape(patch_size, patch_size))
-            ax.axis('off')
-        plt.suptitle(f'Patched input\n Label: {label_tensor_to_string(y)}')
-        plt.show()
+        visualise_patched_input(result, label_tensor_to_string(y), patch_size)
 
     test_patched_captioning()

@@ -137,7 +137,10 @@ class MultiHeadedSelfAttentionBlock(nn.Module):
         # Shape is B x H x N x D_h
         head_outputs = A @ v
         # Final shape is back to B x N x D_in
-        return self.linear(head_outputs.transpose(1, 2).contiguous().view(B, N, -1))
+        return self.linear(
+            head_outputs.transpose(1, 2).contiguous()
+            .view(B, N, -1),
+        )
 
 
 class MultiHeadedCrossAttentionBlock(nn.Module):
@@ -197,7 +200,10 @@ class MultiHeadedCrossAttentionBlock(nn.Module):
         # Shape is B x H x N_dec x D_h
         head_outputs = torch.matmul(A, v)
         # Final shape is back to B x N_dec x D_in
-        return self.linear(head_outputs.transpose(1, 2).contiguous().view(B, N_dec, -1))
+        return self.linear(
+            head_outputs.transpose(1, 2).contiguous()
+            .view(B, N_dec, -1),
+        )
 
 
 class MLP(nn.Module):
@@ -221,7 +227,7 @@ class MLP(nn.Module):
         X = self.linear_2(self.activation(self.linear_1(X)))
         return X
 
-# ------------------------------- Encoder blocks -------------------------------
+# ------------------------------- Encoder blocks ------------------------------
 
 
 class TransformerBlock(torch.nn.Module):
@@ -291,14 +297,15 @@ class TransformerEncoder(torch.nn.Module):
         X = self.blocks(X)
         return self.ln(X)
 
-# ------------------------------- Decoder blocks -------------------------------
+# ------------------------------- Decoder blocks ------------------------------
 
 
 class TransformerDecoderBlock(torch.nn.Module):
     def __init__(self, hidden_dim: int, num_heads: int, dim_feedforward: int):
         """
         Following the PyTorch interface
-        https://pytorch.org/docs/stable/generated/torch.nn.TransformerDecoderLayer.html
+        https://pytorch.org/docs/stable/generated/
+            torch.nn.TransformerDecoderLayer.html
 
         # Using notation from Vaswani et al. (2017) paper
         # in dim: d_model
@@ -401,24 +408,22 @@ class TransformerCaptioner(torch.nn.Module):
 
     def __init__(
         self,
-        in_dim_enc,
-        in_dim_dec,
-        d_model,
-        num_heads,
-        seq_len_enc,
-        seq_len_dec,
-        num_layers,
-        dim_feedforward,
-        num_classes,
+        in_dim_enc: int,
+        d_model: int,
+        num_heads: int,
+        seq_len_enc: int,
+        seq_len_dec: int,
+        num_layers: int,
+        dim_feedforward: int,
+        num_classes: int,
     ):
 
         # seq_len_dec = N_tokens is the (max) number of tokens in the decoder
         super().__init__()
         self.in_dim_enc = in_dim_enc
-        self.in_dim_dec = in_dim_dec
 
         self.linear_proj_enc = nn.Linear(in_dim_enc, d_model)
-        self.linear_proj_dec = nn.Linear(in_dim_dec, d_model)
+        self.linear_proj_dec = nn.Embedding(num_classes, d_model)
 
         # Fixed learnable position embeddings shape (1, N, d_model)
         self.positional_embeddings_enc = nn.Parameter(
@@ -432,9 +437,11 @@ class TransformerCaptioner(torch.nn.Module):
         nn.init.xavier_uniform_(self.positional_embeddings_dec)
 
         self.enc = TransformerEncoder(
-            d_model, num_heads, num_layers, dim_feedforward)
+            d_model, num_heads, num_layers, dim_feedforward,
+        )
         self.dec = TransformerDecoder(
-            d_model, num_heads, num_layers, dim_feedforward)
+            d_model, num_heads, num_layers, dim_feedforward,
+        )
 
         self.output_proj = nn.Linear(d_model, num_classes)
 
@@ -445,12 +452,15 @@ class TransformerCaptioner(torch.nn.Module):
             f'input shape {X.shape} does not match in_dim_enc {self.in_dim_enc}'
         )
 
-        assert target.shape[2] == self.in_dim_dec, (
-            f'target shape {target.shape} does not match in_dim_dec {self.in_dim_dec}'
+        assert target.shape[2] == 1, (
+            f'target shape {target.shape} is not 1'
         )
         # Encode image: out is B x N_patches x D_model
-        X_enc = self.enc(self.linear_proj_enc(
-            X) + self.positional_embeddings_enc)
+        X_enc = self.enc(
+            self.linear_proj_enc(
+                X,
+            ) + self.positional_embeddings_enc,
+        )
         # Generate captions using encoder output, out is B x N_tokens x D_model
         out = self.dec(
             self.linear_proj_dec(target) + self.positional_embeddings_dec,
@@ -574,7 +584,9 @@ if __name__ == '__main__':
                 dim_feedforward = 512
 
                 x_enc = torch.randn(batch_size, seq_len_enc, in_dim_enc)
-                x_dec = torch.randn(batch_size, seq_len_dec, in_dim_dec)
+                x_dec = torch.randint(
+                    0, 12, (batch_size, seq_len_dec, in_dim_dec),
+                )
 
                 captioner = TransformerCaptioner(
                     in_dim_enc,
