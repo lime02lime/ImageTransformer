@@ -239,10 +239,10 @@ def main():
         'learning_rate': 1e-4,
         'min_lr': 5e-7,
         'weight_decay': 0.01,
-        'epochs': 30,
+        'epochs': 40,
         'batch_size': 256,
         'num_heads': 8,
-        'emb_dim': 256,
+        'emb_dim': 512,
         'ff_hidden_dim': 512,
         'num_encoder_layers': 6,
         'num_decoder_layers': 6,
@@ -275,7 +275,7 @@ def main():
     )
     
     # Your training loop
-    model_save_path = 'best_model.pth'
+    model_save_path = 'best_model_512D.pth'
     
     if train_or_eval == 'train':
         # Train the model
