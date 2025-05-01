@@ -16,7 +16,7 @@ class GridMNISTDataset(Dataset):
         self.max_digits = max_digits
 
     def __len__(self):
-        return len(self.mnist) // (self.max_digits // 4)
+        return len(self.mnist) // (self.max_digits // 2)
 
     def __getitem__(self, idx):
         canvas = torch.zeros(1, self.canvas_size, self.canvas_size)
@@ -57,10 +57,10 @@ def create_image_patches(image, patch_size=14):
     return patches
 
 
-def collate_fn(batch):
+def collate_fn(batch, patch_size=7):
     images = [item[0] for item in batch]
     labels = [item[1] for item in batch]
-    patch_list = [create_image_patches(image) for image in images]
+    patch_list = [create_image_patches(image, patch_size) for image in images]
     patches = torch.tensor(np.array(patch_list), dtype=torch.float32)
     labels = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=12)  # PAD = 12
     return patches, labels

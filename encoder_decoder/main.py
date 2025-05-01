@@ -247,10 +247,10 @@ def main():
         'ff_hidden_dim': 256,
         'num_encoder_layers': 6,
         'num_decoder_layers': 6,
-        'patch_dim': 196, 
+        'patch_dim': 49,  # 7x7 pixel patches
         'num_classes': 13,  # 10 digits + start/stop tokens
         'max_seq_length': 12,
-        'num_patches': 64   
+        'num_patches': 256   # each image is 4x4 sub images each with 4x4 patches of 7x7 pixels
     }
 
     # Load data
