@@ -86,6 +86,7 @@ class MNISTCaptioningDataset:
         return len(self.base_dataset)
 
     def __getitem__(self, idx):
+        
         torch.manual_seed(idx)
 
         num_bool = torch.rand(8 * 8) > (1 - self.prob_number)
@@ -109,10 +110,11 @@ class MNISTCaptioningDataset:
         numbers = torch.stack(numbers)
 
         # Somehow becomes 3 channeled, set to single channeled
+        # Shape is (1, 224, 224)
         numbers = make_grid(numbers, nrow=8, padding=0)[0:1]
         y = torch.tensor(labels)
-
         if self.transform is not None:
+            # Output shape is (N = (224/P)**2, P*P)
             numbers = self.transform(numbers)
         return numbers, y
 
@@ -122,12 +124,9 @@ def make_mnist_captioning_dataset(patch=False, patch_size=None):
     if patch:
         assert patch_size is not None
         patch_mnist = partial(patchify, P=patch_size)
-        mnist_transforms = T.Compose([
-            T.ToTensor(),
-            patch_mnist,
-        ])
+        mnist_transforms = patch_mnist 
     else:
-        mnist_transforms = to_tensor
+        mnist_transforms = None
 
     train_ds = MNISTCaptioningDataset(
         MNIST_PATH, train=True,  transform=mnist_transforms,

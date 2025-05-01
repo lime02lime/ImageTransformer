@@ -109,7 +109,8 @@ class MultiHeadedSelfAttentionBlock(nn.Module):
         self.linear = nn.Linear(
             num_heads * hidden_dim_per_head, in_dim, bias=False,
         )
-        self.softmax = nn.Softmax(dim=1)
+        # Normalise along query token dimension
+        self.softmax = nn.Softmax(dim=-2)
 
     def forward(self, X, is_causal=False):
         # B is the batch size
@@ -432,9 +433,10 @@ class TransformerCaptioner(torch.nn.Module):
         self.positional_embeddings_dec = nn.Parameter(
             torch.empty(1, seq_len_dec, d_model),
         )
-        # Xavier/ Glorot initialisation
-        nn.init.xavier_uniform_(self.positional_embeddings_enc)
-        nn.init.xavier_uniform_(self.positional_embeddings_dec)
+        # Xavier/ Glorot initialisation produced NaNs
+        # now use normal
+        nn.init.normal_(self.positional_embeddings_enc, std = 0.02)
+        nn.init.normal_(self.positional_embeddings_dec, std = 0.02)
 
         self.enc = TransformerEncoder(
             d_model, num_heads, num_layers, dim_feedforward,
@@ -447,13 +449,18 @@ class TransformerCaptioner(torch.nn.Module):
 
     def forward(self, X, target=None):
         # X is the encoder input, shape B x N_patches x D_model
-        # target is the decoder input, shape B x N_tokens x in_dim_dec
+        # target is the decoder input, shape B x N_tokens 
         assert X.shape[2] == self.in_dim_enc, (
             f'input shape {X.shape} does not match in_dim_enc {self.in_dim_enc}'
         )
 
-        assert target.shape[2] == 1, (
-            f'target shape {target.shape} is not 1'
+        if target is None:
+            raise NotImplementedError(
+                'target is None, not implemented yet. '
+                'Use the decoder with teacher forcing.',
+            )
+        assert target.ndim == 2, (
+            f'target shape {target.shape} is not 2'
         )
         # Encode image: out is B x N_patches x D_model
         X_enc = self.enc(
@@ -466,12 +473,6 @@ class TransformerCaptioner(torch.nn.Module):
             self.linear_proj_dec(target) + self.positional_embeddings_dec,
             X_enc,
         )
-
-        if target is None:
-            raise NotImplementedError(
-                'target is None, not implemented yet. '
-                'Use the decoder with teacher forcing.',
-            )
 
         # Shape is B x N x num_classes
         scores = self.output_proj(out)
