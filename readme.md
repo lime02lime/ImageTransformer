@@ -45,20 +45,27 @@ A nice baseline would be CNN-based character detector and then the MNIST classif
         -
     Implements Pre normalisation
 
+First I tried grid predictions
+
+- Remember to pad the tokens
+
 Learnings
 
 - Names are hard
-- Start from the specific, then generalise
+- Start from the specific, then generalise. Write out the loopy version, write out the matmul version
+- Think about inputs and outputs and what they mean
 
 Transformer decoder:
-- The job of the language modeling head is to take the output of the final trans-
-former layer from the last token N and use it to predict the upcoming word at posi-
-tion N + 1
 
+- The job of the language modeling head is to take the output of the final trans-
+  former layer from the last token N and use it to predict the upcoming word at posi-
+  tion N + 1
+- Decoder inference is the hard bit
 
 ## Training setup
 
 First time on device
+
 ```bash
 source setup_env.sh
 ```

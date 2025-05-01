@@ -449,7 +449,7 @@ class TransformerCaptioner(torch.nn.Module):
 
     def forward(self, X, target=None):
         # X is the encoder input, shape B x N_patches x D_model
-        # target is the decoder input, shape B x N_tokens 
+        # target is the decoder input, shape B x N_tokens_batch 
         assert X.shape[2] == self.in_dim_enc, (
             f'input shape {X.shape} does not match in_dim_enc {self.in_dim_enc}'
         )
@@ -462,15 +462,21 @@ class TransformerCaptioner(torch.nn.Module):
         assert target.ndim == 2, (
             f'target shape {target.shape} is not 2'
         )
+        B, N_tokens_batch = target.shape
+
+        assert N_tokens_batch <= self.seq_len_dec, (
+            f'target sequence length {target.shape} is greater than maximum ' 
+            f'acceptable sequence length{self.seq_len_dec}')
+        
         # Encode image: out is B x N_patches x D_model
         X_enc = self.enc(
             self.linear_proj_enc(
                 X,
             ) + self.positional_embeddings_enc,
         )
-        # Generate captions using encoder output, out is B x N_tokens x D_model
+        # Generate captions using encoder output, out is B x N_tokens_batch x D_model
         out = self.dec(
-            self.linear_proj_dec(target) + self.positional_embeddings_dec,
+            self.linear_proj_dec(target) + self.positional_embeddings_dec[:, :N_tokens_batch],
             X_enc,
         )
 

@@ -66,32 +66,40 @@ def make_mnist_dataset(patch=False, patch_size=None):
 
 
 class MNISTCaptioningDataset:
-    def __init__(self, mnist_path, train: bool = True, transform=None):
+    def __init__(self, mnist_path, train: bool = True, transform=None, return_empty_labels=True):
         self.base_dataset = torchvision.datasets.MNIST(
             mnist_path, train=train, download=True,
         )
-        # 10 is the label for the zero image
-        # 11 is the label for the start token
-        # 12 is the label for the end token
+        self.bos_token_id = 11
+        self.eos_token_id = 11
+        self.empty_token_id = 10
+        self.pad_token_id = 10
+
         self.im_size = 224
         self.prob_number = 0.4
         self.transform = transform
         self.zero_image = torch.zeros((1, 28, 28))
 
-        self.zero_token = 10
-        self.start_token = 11
-        self.end_token = 12
+
+        self.return_empty_labels = return_empty_labels
+        self.grid_size = 8
 
     def __len__(self):
         return len(self.base_dataset)
 
     def __getitem__(self, idx):
-        
+        """
+        Max length L_max self.grid_size * self.grid_size
+
+        numbers: 8x8 grid of MNIST digits, shape (1, self.im_size, self.im_size)
+            value range is [0, 1]
+        labels: torch.tensor of variable length, shape (1- L_max)
+        """
         torch.manual_seed(idx)
 
-        num_bool = torch.rand(8 * 8) > (1 - self.prob_number)
+        num_bool = torch.rand(self.grid_size * self.grid_size) > (1 - self.prob_number)
         numbers = []
-        labels = [self.start_token]
+        labels = []
 
         for i in num_bool:
             if i:
@@ -104,9 +112,11 @@ class MNISTCaptioningDataset:
                 labels.append(y)
             else:
                 numbers.append(self.zero_image)
-                labels.append(self.zero_token)
+                if self.return_empty_labels:
+                    labels.append(self.empty_token_id)
+
         # End sequence token
-        labels.append(self.end_token)
+        # labels.append(self.end_token)
         numbers = torch.stack(numbers)
 
         # Somehow becomes 3 channeled, set to single channeled
@@ -117,23 +127,40 @@ class MNISTCaptioningDataset:
             # Output shape is (N = (224/P)**2, P*P)
             numbers = self.transform(numbers)
         return numbers, y
+    
+    def collate_fn(self, batch):
+        """
+        Collate function for DataLoader
+        """
+        # List of tuples (image, label)
+        images, labels = zip(*batch)
+        images = torch.stack(images)
+        labels = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=self.pad_token_id)
+        return images, labels
 
 
-def make_mnist_captioning_dataset(mnist_path, patch=False, patch_size=None):
+def make_mnist_captioning_dataset(mnist_path, patch=False, patch_size=None, return_empty_labels = True):
 
     if patch:
         assert patch_size is not None
+        # TODO scale between -0.5, 0.5
         patch_mnist = partial(patchify, P=patch_size)
         mnist_transforms = patch_mnist 
     else:
         mnist_transforms = None
 
     train_ds = MNISTCaptioningDataset(
-        mnist_path, train=True,  transform=mnist_transforms,
+        mnist_path, 
+        train=True,  
+        transform=mnist_transforms, 
+        return_empty_labels=return_empty_labels
     )
 
-    val_ds = torchvision.datasets.MNIST(
-        mnist_path, train=False,  transform=mnist_transforms,
+    val_ds = MNISTCaptioningDataset(
+        mnist_path, 
+        train=False,  
+        transform=mnist_transforms, 
+        return_empty_labels = return_empty_labels
     )
 
     return train_ds, val_ds
@@ -202,7 +229,7 @@ if __name__ == '__main__':
         patch_size = 16
         patch_mnist = partial(patchify, P=patch_size)
         dataset = MNISTCaptioningDataset(
-            MNIST_PATH, train=True, transform=patch_mnist,
+            MNIST_PATH, train=True, transform=patch_mnist, return_empty_labels = False
         )
         result, y = dataset[0]
         print(result.shape)

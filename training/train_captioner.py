@@ -3,10 +3,10 @@ import os
 from datetime import datetime
 
 import torch
-import wandb
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 
+import wandb
 from captioner.dataset import make_mnist_captioning_dataset
 from captioner.models import TransformerCaptioner
 from captioner.utils import count_trainable_params, get_device
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(level=logging.INFO)
 
-NUM_WORKERS = 4
+NUM_WORKERS = 1
 
 def calculate_accuracy(scores, y):
     # scores: B, N, N_classes
@@ -28,7 +28,7 @@ class Validator:
         self.valid_dl = validation_dataloader
         self.device = device
 
-    def validate(self, model: torch.nn.Module, loss_fn: torch.nn.Module, score_fn):
+    def validate(self, model: torch.nn.Module, loss_fn: torch.nn.Module):
         total_correct = 0
         count = 0
         total_loss = 0.
@@ -46,6 +46,14 @@ class Validator:
                 count += len(y)
 
         return total_loss / len(self.valid_dl), total_correct / count
+
+    def run_inference_single(self, model: torch.nn.Module, x):
+        with torch.no_grad():
+            x = x.to(self.device)
+            scores = model(x, )
+            # Get the predicted sequence
+            pred_seq = scores.argmax(dim=-1)
+            return pred_seq
 
 class Trainer:
     def __init__(
@@ -69,6 +77,7 @@ class Trainer:
             shuffle=True,
             drop_last=True,
             num_workers=NUM_WORKERS,
+            collate_fn=self.train_ds.collate_fn,
         )
         self.val_dl = DataLoader(
             self.val_ds,
@@ -76,6 +85,7 @@ class Trainer:
             shuffle=False,
             drop_last=True,
             num_workers=NUM_WORKERS,
+            collate_fn=self.val_ds.collate_fn,
         )
 
         self.validator = Validator(self.val_dl, self.device)
@@ -98,23 +108,23 @@ class Trainer:
             optimiser.zero_grad()
             x, y = batch
             B, N_dec = y.shape 
-            # y is double padded by default
-            N_dec -= 1
+            # y is a padded sequence
+            # add 1 for the (utility) <bos> or <eos> token
+            # s.t. N_dec is the max length of the sequence in the batch
+            N_dec += 1
 
             x = x.to(self.device)
             y = y.to(self.device)
             # x shape B, D
             # decoder input is indexed until the <end> token
-            # Scores are (unnormalised) logits
 
-            scores = encoder(x, y[..., :-1])
+            # Scores are (unnormalised) logits
+            util_column = torch.full((B, 1), self.train_dl.dataset.eos_token_id, dtype=y.dtype, device=y.device)
+            input = torch.cat([util_column, y], dim=1)
+            target = torch.cat([y, util_column], dim=1)
+            scores = encoder(x, input)
 
             # Then do the loss
-            # target has the <start> token removed
-            # Do some dirty copying to shift the token indices
-            target = y[...,1:].clone().detach()
-            target[..., -1] = y[..., 0].clone().detach()
-
             loss = loss_fn(scores.view(B*N_dec, -1), target.view(-1))
             loss.backward()
             optimiser.step()
@@ -125,7 +135,7 @@ class Trainer:
                 logger.info(f'Correct seq:\t{",".join([str(i) for i in target[0].tolist()])}')
                 logger.info(
                     f'Predicted seq:\t{",".join([str(i) for i in scores.argmax(-1)[0].tolist()])}')
-                 
+                encoder(x[0:1], y[0:1, 0:1])
                 # Calculate accuracy metric
                 accuracy = calculate_accuracy(scores, target)
                 ppl = torch.exp(loss)
@@ -212,9 +222,25 @@ class Trainer:
                     artifact.add_file(checkpoint_path)
                     wandb.run.log_artifact(artifact)
 
+import argparse
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Example script with a --log_to_wandb flag"
+    )
+    parser.add_argument(
+        "--log_to_wandb",
+        action="store_true",
+        help="If set, enable logging to Weights & Biases"
+    )
+    return parser.parse_args()
 
 if __name__ == '__main__':
-    
+
+    args = parse_args()
+    log_to_wandb = args.log_to_wandb
+
     # Model configs
     model_config = {
         'patch_size': 16,
@@ -227,14 +253,14 @@ if __name__ == '__main__':
         'num_classes': 12, # 10 digits + blank token + either <start> or <end>
     }
     # Config parameters
-    setup_config = {'batch_size': 2}
+    setup_config = {'batch_size': 8}
 
     # Training configs
     training_config = {
         'epochs': 5,
         'lr': 1e-3,
-        'log_locally': True,
-        'log_to_wandb': False,
+        'log_locally': False,
+        'log_to_wandb': log_to_wandb,
         'batches_print_frequency': 10,
     }
 
@@ -256,7 +282,8 @@ if __name__ == '__main__':
 
     train_ds, val_ds = make_mnist_captioning_dataset('~/data', 
                                                      patch = True, 
-                                                     patch_size=model_config['patch_size'])
+                                                     patch_size=model_config['patch_size'],
+                                                     return_empty_labels = False)
     
     optimiser = torch.optim.Adam(
         model.parameters(), lr=training_config.get('lr'),
@@ -282,17 +309,17 @@ if __name__ == '__main__':
         setup_config=setup_config,
         device=device,
     )
-    trainer.train_one_epoch(
-        model=model,
-        loss_fn=loss_fn,
-        optimiser=optimiser,
-        batches_print_frequency=training_config.get('batches_print_frequency'),
-    )
-
-    # trainer.train(
-    #     epochs=training_config.get('epochs'),
+    # trainer.train_one_epoch(
     #     model=model,
     #     loss_fn=loss_fn,
     #     optimiser=optimiser,
-    #     config=training_config,
+    #     batches_print_frequency=training_config.get('batches_print_frequency'),
     # )
+
+    trainer.train(
+        epochs=training_config.get('epochs'),
+        model=model,
+        loss_fn=loss_fn,
+        optimiser=optimiser,
+        config=training_config,
+    )
