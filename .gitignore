@@ -1,2 +1,3 @@
 checkpoints/
 captioner.egg-info
+*.pyc

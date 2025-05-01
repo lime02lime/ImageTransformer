@@ -119,7 +119,7 @@ class MNISTCaptioningDataset:
         return numbers, y
 
 
-def make_mnist_captioning_dataset(patch=False, patch_size=None):
+def make_mnist_captioning_dataset(mnist_path, patch=False, patch_size=None):
 
     if patch:
         assert patch_size is not None
@@ -129,11 +129,11 @@ def make_mnist_captioning_dataset(patch=False, patch_size=None):
         mnist_transforms = None
 
     train_ds = MNISTCaptioningDataset(
-        MNIST_PATH, train=True,  transform=mnist_transforms,
+        mnist_path, train=True,  transform=mnist_transforms,
     )
 
     val_ds = torchvision.datasets.MNIST(
-        MNIST_PATH, train=False,  transform=mnist_transforms,
+        mnist_path, train=False,  transform=mnist_transforms,
     )
 
     return train_ds, val_ds

@@ -50,4 +50,23 @@ Learnings
 - Names are hard
 - Start from the specific, then generalise
 
+Transformer decoder:
+- The job of the language modeling head is to take the output of the final trans-
+former layer from the last token N and use it to predict the upcoming word at posi-
+tion N + 1
+
+
+## Training setup
+
+First time on device
+```bash
+source setup_env.sh
+```
+
+Next
+
+```
+conda activate venv
+```
+
 ## References

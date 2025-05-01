@@ -15,11 +15,13 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(level=logging.INFO)
 
-NUM_WORKERS = 1
+NUM_WORKERS = 4
 
 def calculate_accuracy(scores, y):
+    # scores: B, N, N_classes
+    # y: B, N
     correct = torch.sum(scores.argmax(dim=-1) == y)
-    return correct/len(y)
+    return correct/y.numel()
 
 class Validator:
     def __init__(self, validation_dataloader: DataLoader, device: torch.device):
@@ -96,23 +98,36 @@ class Trainer:
             optimiser.zero_grad()
             x, y = batch
             B, N_dec = y.shape 
+            # y is double padded by default
+            N_dec -= 1
 
             x = x.to(self.device)
             y = y.to(self.device)
             # x shape B, D
+            # decoder input is indexed until the <end> token
             # Scores are (unnormalised) logits
-            scores = encoder(x, y)
+
+            scores = encoder(x, y[..., :-1])
 
             # Then do the loss
-            loss = loss_fn(scores.view(B*N_dec, -1), y.view(-1))
+            # target has the <start> token removed
+            # Do some dirty copying to shift the token indices
+            target = y[...,1:].clone().detach()
+            target[..., -1] = y[..., 0].clone().detach()
+
+            loss = loss_fn(scores.view(B*N_dec, -1), target.view(-1))
             loss.backward()
             optimiser.step()
 
             # Gather data and report
             running_loss += loss.item()
             if batch_idx % batches_print_frequency == (batches_print_frequency - 1):
+                logger.info(f'Correct seq:\t{",".join([str(i) for i in target[0].tolist()])}')
+                logger.info(
+                    f'Predicted seq:\t{",".join([str(i) for i in scores.argmax(-1)[0].tolist()])}')
+                 
                 # Calculate accuracy metric
-                accuracy = calculate_accuracy(scores, y)
+                accuracy = calculate_accuracy(scores, target)
                 ppl = torch.exp(loss)
                 # loss per batch
                 last_loss = running_loss / batches_print_frequency
@@ -206,13 +221,13 @@ if __name__ == '__main__':
         'hidden_dim': 256,
         'num_heads': 12,
         'seq_len_enc': 196, # Number of patches 244/16 * 244/16 = 196
-        'seq_len_dec': 66, # Number of tokens, fixed first
+        'seq_len_dec': 65, # Number of tokens, fixed first
         'num_layers': 6,
         'dim_feedforward': 512,
-        'num_classes': 13,
+        'num_classes': 12, # 10 digits + blank token + either <start> or <end>
     }
     # Config parameters
-    setup_config = {'batch_size': 32}
+    setup_config = {'batch_size': 2}
 
     # Training configs
     training_config = {
@@ -220,7 +235,7 @@ if __name__ == '__main__':
         'lr': 1e-3,
         'log_locally': True,
         'log_to_wandb': False,
-        'batches_print_frequency': 50,
+        'batches_print_frequency': 10,
     }
 
     device = get_device()
@@ -239,7 +254,8 @@ if __name__ == '__main__':
     logger.info(f'There are {num_params} trainable parameters in the model.')
     logger.info(model)
 
-    train_ds, val_ds = make_mnist_captioning_dataset(patch = True, 
+    train_ds, val_ds = make_mnist_captioning_dataset('~/data', 
+                                                     patch = True, 
                                                      patch_size=model_config['patch_size'])
     
     optimiser = torch.optim.Adam(

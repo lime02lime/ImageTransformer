@@ -1,0 +1,20 @@
+name: venv
+channels:
+  - defaults
+  - conda-forge
+  - huggingface
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - pandas
+  - matplotlib
+  - scipy
+  - pytorch
+  - torchvision
+  - conda-forge::datasets
+  - conda-forge::wandb
+  - tqdm
+  - pre-commit
+  - pip:
+    - wandb
