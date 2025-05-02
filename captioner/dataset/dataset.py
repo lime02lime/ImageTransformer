@@ -37,6 +37,39 @@ def patchify(X: torch.Tensor, P: int) -> torch.Tensor:
 
     return patches
 
+def unpatch(patches: torch.Tensor, H: int, W: int, P: int) -> torch.Tensor:
+    """
+    Reconstructs the (H, W) image from flattened non-overlapping patches.
+
+    Args:
+      patches: tensor of shape (num_patches, P*P)
+      H:       original image height (must be multiple of P)
+      W:       original image width  (must be multiple of P)
+      P:       patch size
+
+    Returns:
+      X: tensor of shape (H, W)
+    """
+    # 1) Number of patches along each dimension
+    n_h = H // P
+    n_w = W // P
+
+    # 2) Reshape back to (n_h, n_w, P, P)
+    #    First make sure the total matches
+    assert patches.numel() == n_h * n_w * P * P, \
+        "Mismatch between patches and H, W, P"
+    x = patches.view(n_h, n_w, P, P)
+
+    # 3) Permute and reshape to (H, W)
+    #    We want to interleave the small P×P blocks
+    #    so that:
+    #      for i in 0..n_h-1:
+    #        for j in 0..n_w-1:
+    #          block (i,j) goes to rows [i*P:(i+1)*P], cols [j*P:(j+1)*P]
+    X = x.permute(0, 2, 1, 3)   # now (n_h, P, n_w, P)
+    X = X.contiguous().view(H, W)
+    return X
+
 # MNIST Classification --------------------------------------------------------
 
 

@@ -3,7 +3,9 @@ from .dataset import (
     label_tensor_to_string,
     make_mnist_captioning_dataset,
     make_mnist_dataset,
+    patchify,
     to_tensor,
+    unpatch,
 )
 
 __all__ = [
@@ -11,4 +13,6 @@ __all__ = [
     'make_mnist_dataset', 
     'make_mnist_captioning_dataset',
     'label_tensor_to_string',
+    'unpatch',
+    'patchify',
 ]
