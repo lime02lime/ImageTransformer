@@ -104,7 +104,7 @@ def train_model(model, train_loader, val_loader, config, save_path='best_model.p
         entity="emilengdahl",
         project="ImageTransformer",
         config=config,
-        name=run_name, reinit=True, id=None
+        name=run_name, id=None, resume="allow"
     )
     
     # Setup training
@@ -157,7 +157,7 @@ def train_model(model, train_loader, val_loader, config, save_path='best_model.p
 
             best_val_loss = val_loss
             artifact = wandb.Artifact('best-model', type='model')
-            artifact.add_file('best_model.pth')
+            artifact.add_file(save_path)
             wandb.log_artifact(artifact)
         
         print(f'Epoch {epoch}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Val Accuracy = {val_accuracy:.4f}')
@@ -237,20 +237,20 @@ def main():
     
     # config for training
     config = {
-        'learning_rate': 1e-3,
+        'learning_rate': 1e-4,
         'min_lr': 5e-7,
         'weight_decay': 0.01,
         'epochs': 25,
-        'batch_size': 512,
+        'batch_size': 128,
         'num_heads': 8,
-        'emb_dim': 2048,
-        'ff_hidden_dim': 256,
-        'num_encoder_layers': 6,
-        'num_decoder_layers': 6,
-        'patch_dim': 49,  # 7x7 pixel patches
+        'emb_dim': 1024,
+        'ff_hidden_dim': 128,
+        'num_encoder_layers': 8,
+        'num_decoder_layers': 8,
         'num_classes': 13,  # 10 digits + start/stop tokens
         'max_seq_length': 12,
-        'num_patches': 256   # each image is 4x4 sub images each with 4x4 patches of 7x7 pixels
+        'patch_dim': 196,  # 14x14 pixel patches
+        'num_patches': 64   # each image is 4x4 sub images each with 2x2 patches of 14x14 pixels
     }
 
     # Load data
