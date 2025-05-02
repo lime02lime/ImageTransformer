@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 
 
 def visualise_patched_input(result, label_str, patch_size):
+    
     fig, axs = plt.subplots(14, 14)
     axs = axs.flatten()
     for idx, ax in enumerate(axs):

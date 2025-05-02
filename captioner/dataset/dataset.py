@@ -66,7 +66,7 @@ def make_mnist_dataset(patch=False, patch_size=None):
 
 
 class MNISTCaptioningDataset:
-    def __init__(self, mnist_path, train: bool = True, transform=None, return_empty_labels=True):
+    def __init__(self, mnist_path, train: bool = True, transform=None, return_empty_labels=True, im_size=112):
         self.base_dataset = torchvision.datasets.MNIST(
             mnist_path, train=train, download=True,
         )
@@ -75,14 +75,15 @@ class MNISTCaptioningDataset:
         self.empty_token_id = 10
         self.pad_token_id = 10
 
-        self.im_size = 224
+        self.im_size = im_size
         self.prob_number = 0.4
         self.transform = transform
         self.zero_image = torch.zeros((1, 28, 28))
-
+        assert self.im_size % 28 == 0, 'Image size must be divisible by 28'
+        self.grid_size = im_size//28
 
         self.return_empty_labels = return_empty_labels
-        self.grid_size = 8
+         
 
     def __len__(self):
         return len(self.base_dataset)
@@ -116,12 +117,12 @@ class MNISTCaptioningDataset:
                     labels.append(self.empty_token_id)
 
         # End sequence token
-        # labels.append(self.end_token)
+        labels.append(self.eos_token_id)
         numbers = torch.stack(numbers)
 
         # Somehow becomes 3 channeled, set to single channeled
         # Shape is (1, 224, 224)
-        numbers = make_grid(numbers, nrow=8, padding=0)[0:1]
+        numbers = make_grid(numbers, nrow=self.grid_size, padding=0)[0:1]
         y = torch.tensor(labels)
         if self.transform is not None:
             # Output shape is (N = (224/P)**2, P*P)
@@ -139,10 +140,11 @@ class MNISTCaptioningDataset:
         return images, labels
 
 
-def make_mnist_captioning_dataset(mnist_path, patch=False, patch_size=None, return_empty_labels = True):
+def make_mnist_captioning_dataset(mnist_path, patch=False, patch_size=None, im_size = 112, return_empty_labels = True):
 
     if patch:
         assert patch_size is not None
+        assert patch_size
         # TODO scale between -0.5, 0.5
         patch_mnist = partial(patchify, P=patch_size)
         mnist_transforms = patch_mnist 
@@ -153,14 +155,16 @@ def make_mnist_captioning_dataset(mnist_path, patch=False, patch_size=None, retu
         mnist_path, 
         train=True,  
         transform=mnist_transforms, 
-        return_empty_labels=return_empty_labels
+        return_empty_labels=return_empty_labels,
+        im_size=im_size
     )
 
     val_ds = MNISTCaptioningDataset(
         mnist_path, 
         train=False,  
         transform=mnist_transforms, 
-        return_empty_labels = return_empty_labels
+        return_empty_labels = return_empty_labels,
+        im_size=im_size
     )
 
     return train_ds, val_ds

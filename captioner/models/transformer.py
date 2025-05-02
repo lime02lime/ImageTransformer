@@ -109,8 +109,8 @@ class MultiHeadedSelfAttentionBlock(nn.Module):
         self.linear = nn.Linear(
             num_heads * hidden_dim_per_head, in_dim, bias=False,
         )
-        # Normalise along query token dimension
-        self.softmax = nn.Softmax(dim=-2)
+        # Normalise along KEY token dimension, the source
+        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, X, is_causal=False):
         # B is the batch size
@@ -133,7 +133,7 @@ class MultiHeadedSelfAttentionBlock(nn.Module):
             causal_bias = make_causal_attn_bias(N, device=attn_scores.device)
             # This broadcasts across the batch and heads
             attn_scores = attn_scores + causal_bias
-
+        # Shape is B x H x N x N
         A = self.softmax(attn_scores)
         # Shape is B x H x N x D_h
         head_outputs = A @ v
@@ -422,7 +422,7 @@ class TransformerCaptioner(torch.nn.Module):
         # seq_len_dec = N_tokens is the (max) number of tokens in the decoder
         super().__init__()
         self.in_dim_enc = in_dim_enc
-
+        self.seq_len_dec = seq_len_dec
         self.linear_proj_enc = nn.Linear(in_dim_enc, d_model)
         self.linear_proj_dec = nn.Embedding(num_classes, d_model)
 
@@ -549,18 +549,26 @@ if __name__ == '__main__':
             # num_patches = 32
 
             # x = torch.randn(batch_size, num_patches, in_dim)
+            def test_multi_headed_attention_block():
+                T, D, H = 5, 8, 4
 
-            # multi_attention_block = MultiHeadedSelfAttentionBlock(
-            #     in_dim, hidden_dim, num_heads,
-            # )
-            # in_dim = 64
-            # num_classes = 10
+                X = torch.zeros(1, T, D)
+                X[0, 3] = 1.0 
+                multi_attention_block = MultiHeadedSelfAttentionBlock(
+                    D, hidden_dim_per_head=D//H, num_heads=H,
+                )
 
-            # print(multi_attention_block(x, is_causal=True).shape)
-            # x_enc = torch.randn(batch_size, num_patches, in_dim)
-            # x_dec = torch.randn(batch_size, num_tokens, in_dim)
-            # # mhca =  MultiHeadedCrossAttentionBlock(in_dim = in_dim, hidden_dim_per_head=16, num_heads=4)
-            # # mhca(x_dec, x_enc)
+                out = multi_attention_block(X, is_causal=True)
+                print(X)
+                y = out + X
+                print(y)
+                assert torch.allclose(y[0, 2], torch.zeros(D))
+                # x_enc = torch.randn(batch_size, num_patches, in_dim)
+                # x_dec = torch.randn(batch_size, num_tokens, in_dim)
+                # # mhca =  MultiHeadedCrossAttentionBlock(in_dim = in_dim, hidden_dim_per_head=16, num_heads=4)
+                # # mhca(x_dec, x_enc)
+                return
+       
 
             # Testing the decoder block
             def test_decoder_block():
@@ -609,7 +617,8 @@ if __name__ == '__main__':
                 out = captioner(x_enc, x_dec)
                 print(out.shape)
 
-            test_captioner()
+            test_multi_headed_attention_block()
+            # test_captioner()
 
     # Print a table of top 10 slowest ops
     print(

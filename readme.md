@@ -29,6 +29,10 @@ The transformer has been implemented with learnable positional encodings.
 
 ### Task 2: OCR image captioning
 
+| Model                                                                              | Number of parameters |
+| ---------------------------------------------------------------------------------- | -------------------- |
+| ViT Encoder (16x16 patch size, 128 model dim, pre-norm, GELU), Transformer decoder | 836748               |
+
 ![Example image](media/patched_example.png)
 
 The task is to use a vision transformer, trained from scratch to encode the image, and then use a transformer to decode it.
@@ -54,6 +58,11 @@ Learnings
 - Names are hard
 - Start from the specific, then generalise. Write out the loopy version, write out the matmul version
 - Think about inputs and outputs and what they mean
+- Make sure you test your inputs and outputs, do sanity checks
+- Data leakage
+  - Softmax issue
+  - Shifting tokens
+- Reduce your problem to something manageable
 
 Transformer decoder:
 
@@ -61,6 +70,19 @@ Transformer decoder:
   former layer from the last token N and use it to predict the upcoming word at posi-
   tion N + 1
 - Decoder inference is the hard bit
+
+```bash
+# First epoch
+# First guesses the sequence length, and then nothing in the loss matters
+INFO:__main__:Correct seq:      2,3,7,2,3,11,10,10,10,10,10,10
+INFO:__main__:Predicted seq:    2,3,3,3,3,11,11,11,11,11,11,11
+```
+
+```python
+import matplotlib.pyplot as plt
+plt.matshow(A[0][0][-5].cpu().detach().numpy().reshape(7,7))
+plt.show()
+```
 
 ## Training setup
 

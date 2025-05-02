@@ -10,6 +10,7 @@ import wandb
 from captioner.dataset import make_mnist_captioning_dataset
 from captioner.models import TransformerCaptioner
 from captioner.utils import count_trainable_params, get_device
+from captioner.utils.visualise import visualise_patched_input
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -17,9 +18,14 @@ logging.basicConfig(level=logging.INFO)
 
 NUM_WORKERS = 1
 
-def calculate_accuracy(scores, y):
+def calculate_accuracy(scores, y, pad_token_id=None):
     # scores: B, N, N_classes
     # y: B, N
+    if pad_token_id is not None:
+        # Remove padding tokens from the target
+        mask = y != pad_token_id
+        scores = scores[mask]
+        y = y[mask]
     correct = torch.sum(scores.argmax(dim=-1) == y)
     return correct/y.numel()
 
@@ -27,6 +33,8 @@ class Validator:
     def __init__(self, validation_dataloader: DataLoader, device: torch.device):
         self.valid_dl = validation_dataloader
         self.device = device
+        self.pad_token_id = validation_dataloader.dataset.pad_token_id
+        self.eos_token_id = validation_dataloader.dataset.eos_token_id
 
     def validate(self, model: torch.nn.Module, loss_fn: torch.nn.Module):
         total_correct = 0
@@ -35,15 +43,31 @@ class Validator:
         with torch.no_grad():
             for batch_idx, batch in enumerate(tqdm(self.valid_dl)):
                 x, y = batch
+                B, N_dec = y.shape 
+
                 x = x.to(self.device)
                 y = y.to(self.device)
 
-                scores = model(x)
-                loss = loss_fn(scores, y)
+                input = y.clone().detach()
+                input[input == self.eos_token_id] = self.pad_token_id
+                util_column = torch.full((B, 1), self.eos_token_id, 
+                                        dtype=input.dtype, 
+                                        device=input.device)
+                input = torch.cat([util_column, input], dim=1)[:, :-1]
+                
+                target = y #torch.cat([y, util_column], dim=1)
+                scores = model(x, input)
+
+                # Then do the loss
+                loss = loss_fn(scores.view(B*N_dec, -1), target.view(-1))
                 total_loss += loss.item()
-                correct = torch.sum(scores.argmax(dim=1) == y)
-                total_correct += correct
-                count += len(y)
+
+                mask = y != self.pad_token_id
+                scores = scores[mask]
+                target = target[mask]
+                
+                total_correct += torch.sum(scores.argmax(dim=-1) == target)
+                count += torch.numel(target)
 
         return total_loss / len(self.valid_dl), total_correct / count
 
@@ -109,9 +133,8 @@ class Trainer:
             x, y = batch
             B, N_dec = y.shape 
             # y is a padded sequence
-            # add 1 for the (utility) <bos> or <eos> token
+            # do not add 1 for the (utility) <bos> or <eos> token
             # s.t. N_dec is the max length of the sequence in the batch
-            N_dec += 1
 
             x = x.to(self.device)
             y = y.to(self.device)
@@ -119,9 +142,15 @@ class Trainer:
             # decoder input is indexed until the <end> token
 
             # Scores are (unnormalised) logits
-            util_column = torch.full((B, 1), self.train_dl.dataset.eos_token_id, dtype=y.dtype, device=y.device)
-            input = torch.cat([util_column, y], dim=1)
-            target = torch.cat([y, util_column], dim=1)
+            input = y.clone().detach()
+            input[input == self.train_dl.dataset.eos_token_id] = self.train_dl.dataset.pad_token_id
+            util_column = torch.full((B, 1), 
+                                     self.train_dl.dataset.eos_token_id, 
+                                     dtype=input.dtype, 
+                                     device=input.device)
+            input = torch.cat([util_column, input], dim=1)[:, :-1]
+            
+            target = y #torch.cat([y, util_column], dim=1)
             scores = encoder(x, input)
 
             # Then do the loss
@@ -135,9 +164,37 @@ class Trainer:
                 logger.info(f'Correct seq:\t{",".join([str(i) for i in target[0].tolist()])}')
                 logger.info(
                     f'Predicted seq:\t{",".join([str(i) for i in scores.argmax(-1)[0].tolist()])}')
-                encoder(x[0:1], y[0:1, 0:1])
+                
+                # Predict first token
+                # visualise_patched_input(x_im.squeeze().cpu(), None, 16)
+                with torch.no_grad():   
+                    generated = input[0:1, :1]  
+                    for _ in range(model.seq_len_dec - generated.size(1)):
+                        test_scores = model(x[0:1], generated)    # assume outputs.logits [1, T, V]
+                        # 3) Greedy pick at last position
+                        next_token = torch.argmax(test_scores[:, -1, :], dim=-1, keepdim=True)  # [1,1]
+
+                        # 4) Append and check EOS
+                        generated = torch.cat([generated, next_token], dim=1)  # [1, T+1]
+                        if next_token.item() == self.train_dl.dataset.eos_token_id:
+                            break
+                    print(generated)       
+
+                    checkpoint = {
+                        'model_state_dict': model.state_dict(),
+                        'optimiser_state_dict': optimiser.state_dict(),
+                    }
+
+                    checkpoint_path = os.path.join(
+                        '/Users/kenton/projects/mlx-institute/transformer/checkpoints',
+                        f'{datetime.now().strftime("%Y%m%d_%H%M%S")}.pth',
+                    )
+                    torch.save(checkpoint, checkpoint_path)  
+                    
+                
+
                 # Calculate accuracy metric
-                accuracy = calculate_accuracy(scores, target)
+                accuracy = calculate_accuracy(scores, target, pad_token_id=self.train_dl.dataset.pad_token_id)
                 ppl = torch.exp(loss)
                 # loss per batch
                 last_loss = running_loss / batches_print_frequency
@@ -244,16 +301,16 @@ if __name__ == '__main__':
     # Model configs
     model_config = {
         'patch_size': 16,
-        'hidden_dim': 256,
-        'num_heads': 12,
-        'seq_len_enc': 196, # Number of patches 244/16 * 244/16 = 196
-        'seq_len_dec': 65, # Number of tokens, fixed first
-        'num_layers': 6,
-        'dim_feedforward': 512,
+        'hidden_dim': 128,
+        'num_heads': 8,
+        'seq_len_enc': 196//4, # Number of patches 244/16 * 244/16 = 196
+        'seq_len_dec': 17, # Number of tokens, fixed first
+        'num_layers': 3,
+        'dim_feedforward': 128,
         'num_classes': 12, # 10 digits + blank token + either <start> or <end>
     }
     # Config parameters
-    setup_config = {'batch_size': 8}
+    setup_config = {'batch_size': 32}
 
     # Training configs
     training_config = {
@@ -261,7 +318,7 @@ if __name__ == '__main__':
         'lr': 1e-3,
         'log_locally': False,
         'log_to_wandb': log_to_wandb,
-        'batches_print_frequency': 10,
+        'batches_print_frequency': 100,
     }
 
     device = get_device()
@@ -283,7 +340,8 @@ if __name__ == '__main__':
     train_ds, val_ds = make_mnist_captioning_dataset('~/data', 
                                                      patch = True, 
                                                      patch_size=model_config['patch_size'],
-                                                     return_empty_labels = False)
+                                                     return_empty_labels = False,
+                                                     im_size = 112)
     
     optimiser = torch.optim.Adam(
         model.parameters(), lr=training_config.get('lr'),
@@ -295,13 +353,13 @@ if __name__ == '__main__':
     # )
 
     # # Load the model
-    # checkpoint = torch.load(
-    #     checkpoint_path, map_location=device, weights_only=True,
-    # )
-    # query_encoder.load_state_dict(checkpoint['query_encoder_state_dict'])
-    # doc_encoder.load_state_dict(checkpoint['doc_encoder_state_dict'])
+    checkpoint = torch.load(
+        '/Users/kenton/projects/mlx-institute/transformer/checkpoints/20250502_010308.pth', 
+        map_location=device, weights_only=True,
+    )
+    model.load_state_dict(checkpoint['model_state_dict'])
 
-    loss_fn = torch.nn.CrossEntropyLoss()
+    loss_fn = torch.nn.CrossEntropyLoss(ignore_index=train_ds.pad_token_id)
 
     trainer = Trainer(
         train_ds=train_ds,
