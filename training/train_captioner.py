@@ -315,7 +315,7 @@ if __name__ == '__main__':
     # Training configs
     training_config = {
         'epochs': 5,
-        'lr': 1e-3,
+        'lr': 1e-4,
         'log_locally': False,
         'log_to_wandb': log_to_wandb,
         'batches_print_frequency': 100,
@@ -354,7 +354,7 @@ if __name__ == '__main__':
 
     # # Load the model
     checkpoint = torch.load(
-        '/Users/kenton/projects/mlx-institute/transformer/checkpoints/20250502_010308.pth', 
+        '/Users/kenton/projects/mlx-institute/transformer/checkpoints/20250502_131922.pth', 
         map_location=device, weights_only=True,
     )
     model.load_state_dict(checkpoint['model_state_dict'])

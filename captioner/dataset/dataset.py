@@ -217,6 +217,12 @@ def label_tensor_to_string(labels: torch.Tensor) -> str:
             str_list.append(str(label))
     return ','.join(str_list)
 
+def pred_to_string(pred, remove_util=True):
+    if remove_util: 
+        pred = pred[pred != 11]
+
+    return ','.join([str(i) for i  in pred.tolist()])
+
 
 if __name__ == '__main__':
     def show_image():

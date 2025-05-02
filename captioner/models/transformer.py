@@ -167,7 +167,7 @@ class MultiHeadedCrossAttentionBlock(nn.Module):
         self.linear = nn.Linear(
             num_heads * hidden_dim_per_head, in_dim, bias=False,
         )
-        self.softmax = nn.Softmax(dim=1)
+        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, X_dec, X_enc):
         """

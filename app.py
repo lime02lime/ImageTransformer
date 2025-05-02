@@ -1,5 +1,6 @@
 import streamlit as st
 import torch
+from PIL import Image
 from streamlit_drawable_canvas import st_canvas
 
 from captioner.dataset import (
@@ -8,6 +9,7 @@ from captioner.dataset import (
     patchify,
     unpatch,
 )
+from captioner.dataset.dataset import pred_to_string
 from captioner.models import TransformerCaptioner
 from captioner.utils import get_device
 
@@ -52,17 +54,11 @@ def prepare_model():
         num_classes=model_config['num_classes'],
     )
     checkpoint = torch.load(
-    '/Users/kenton/projects/mlx-institute/transformer/checkpoints/20250502_023824.pth', 
+    '/Users/kenton/projects/mlx-institute/transformer/checkpoints/20250502_130855.pth', 
     map_location=device, weights_only=True,
 )
     model.load_state_dict(checkpoint['model_state_dict'])
     return model, device
-
-def pred_to_string(pred, remove_util=True):
-    if remove_util: 
-        pred = pred[pred != 11]
-
-    return ','.join([str(i) for i  in pred.tolist()])
 
 def generate_prediction(X, model, bos_token_id, eos_token_id):
     dec_input = torch.tensor(bos_token_id, dtype=torch.int64).unsqueeze(0).unsqueeze(0)
@@ -115,13 +111,13 @@ st.write('---')
 st.write('## ✍️ Do it yourself!') 
 
 upscale = 5
-
 canvas_result = st_canvas(
     fill_color="rgba(255, 165, 0, 0.3)",  # Fixed fill color with some opacity
     stroke_width=15,
     stroke_color="rgba(255, 255, 255, 1)",
     background_color=[0,0,0],
     background_image=None,
+    # background_image=Image.open('/Users/kenton/projects/mlx-institute/transformer/grid_560x560.png'),
     update_streamlit=True,
     height=IM_SIZE*upscale,
     width=IM_SIZE*upscale,

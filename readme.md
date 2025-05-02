@@ -6,9 +6,9 @@ We compose an image using MNIST tokens and then want to caption them.
 
 ## Dataset
 
-MNIST
+MNIST Dataset
 
-- 28 x 28
+- 28 x 28 hand-drawn numbers
 
 ## Tasks
 
@@ -79,10 +79,30 @@ INFO:__main__:Predicted seq:    2,3,3,3,3,11,11,11,11,11,11,11
 ```
 
 ```python
+# To visualise the weights
 import matplotlib.pyplot as plt
-plt.matshow(A[0][0][-5].cpu().detach().numpy().reshape(7,7))
-plt.show()
+_,N_heads,N_tokens, _ = A.shape
+for i in range(N_heads):
+    plt.matshow(A[0][i].cpu().detach().numpy())
+    plt.ylabel('Q')
+    plt.xlabel('K')
+    plt.title('Masked self-attention for decoder')
+    plt.show()
+    break
+
+import matplotlib.pyplot as plt
+_,N_heads,N_tokens, _ = A.shape
+for i in range(N_tokens):
+    plt.matshow(A[0][1][i].cpu().detach().numpy().reshape(7,7))
+    plt.title(f'Cross attention visualisation for dec token {i}')
+    plt.show()
 ```
+
+Todo
+
+- Implement masking in the predictor
+- Try CNN + RNN Encoder/Decoder setup
+- Data augmentations all the way
 
 ## Training setup
 
